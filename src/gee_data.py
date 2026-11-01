@@ -3,6 +3,8 @@
 The same functions are used for building the training set and by the prototype,
 so training and inference see identically preprocessed data.
 """
+import os
+import threading
 import time
 
 import ee
@@ -149,7 +151,8 @@ def download_tile(image, epsg, x0, y0, out_path, size_px=C.TILE_PX, band_names=N
             time.sleep(5 * 2 ** attempt)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out_path.with_suffix(".part")
+    # unique temp name, so two exports running at once can never write into the same file
+    tmp = out_path.with_name(f"{out_path.stem}.{os.getpid()}.{threading.get_ident()}.part")
     with MemoryFile(data) as mem, mem.open() as src:
         profile = src.profile | dict(driver="GTiff", compress="deflate", predictor=2,
                                      tiled=True, blockxsize=256, blockysize=256)
