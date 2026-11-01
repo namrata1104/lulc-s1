@@ -35,8 +35,8 @@ DW_BANDS = ["water", "trees", "grass", "flooded_vegetation", "crops",
 # grass, flooded vegetation and shrub are merged: their backscatter is too similar in C-band.
 DW_TO_CLASS = [0, 1, 3, 3, 2, 3, 4, 5, IGNORE]
 
-CONF_MIN = 0.5       # pixels whose mean DW top-class probability is below this become IGNORE
-MIN_LABELED = 0.7    # patches with fewer labelled pixels than this are dropped
+CONF_MIN = 0.3       # pixels whose mean DW top-class probability is below this become IGNORE (0.5 removed almost all grass and bare)
+MIN_LABELED = 0.5    # patches with fewer labelled pixels than this are dropped
 
 # --- Time ---------------------------------------------------------------------
 def _months(year, months):
