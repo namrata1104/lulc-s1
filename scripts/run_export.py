@@ -5,6 +5,7 @@
 
 Resumable: tiles that already exist are skipped.
 Add --no-temporal to skip the optional training-regions-in-2025/26 split (test_temporal).
+Add --workers=1 when the Earth Engine project is in restricted mode (quota used up).
 """
 import sys
 import time
@@ -21,7 +22,8 @@ jobs = C.export_jobs(include_temporal="--no-temporal" not in sys.argv)
 print(f"{len(jobs)} area-months", flush=True)
 
 logs, t0 = [], time.time()
-with ThreadPoolExecutor(max_workers=4) as pool:
+workers = int(next((a.split("=")[1] for a in sys.argv if a.startswith("--workers=")), 4))
+with ThreadPoolExecutor(max_workers=workers) as pool:
     futures = {pool.submit(G.export_aoi_month, n, a, m): (n, m) for n, a, m in jobs}
     for i, f in enumerate(as_completed(futures), 1):
         n, m = futures[f]
