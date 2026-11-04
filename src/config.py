@@ -1,15 +1,17 @@
-"""Project-wide settings: GEE project, study areas, classes, months, grid."""
+"""Project-wide settings: GEE project, study areas, classes, periods, grid."""
 from pathlib import Path
 
 GEE_PROJECT = "lulc-sentinel-1"
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
-RAW_DIR = DATA_DIR / "raw"          # GeoTIFF tiles downloaded from GEE
-PATCH_DIR = DATA_DIR / "patches"    # 256x256 numpy patches per split
+RAW_DIR = DATA_DIR / "raw_global"          # GeoTIFF tiles downloaded from GEE
+PATCH_DIR = DATA_DIR / "patches_global"    # 256x256 numpy patches per split
 
 # --- Sentinel-1 -------------------------------------------------------------
-ORBIT_PASS = "DESCENDING"   # one pass only: mixing passes changes incidence angle -> fake change
+# One pass per study area: mixing passes changes the incidence angle -> fake change.
+# Since Sentinel-1B failed (Dec 2021) many regions are only well covered by one pass,
+# so the pass is chosen per area (see AOIS, chosen by scripts/choose_orbits.py).
 BORDER_DB = -30.0           # pixels below this (VV, dB) are treated as no-data / border noise
 LEE_KERNEL = 5              # Lee speckle filter window (pixels)
 ENL = 4.4                   # equivalent number of looks, Sentinel-1 IW GRD-HR
@@ -25,17 +27,19 @@ TILE_PX = 1024       # size of one computePixels request (keeps each request wel
 PATCH_PX = 256
 
 # --- Classes ------------------------------------------------------------------
-CLASSES = ["water", "trees", "crops", "grass_shrub", "built", "bare"]
-CLASS_COLORS = ["#419bdf", "#397d49", "#e49635", "#88b053", "#c4281b", "#a59b8f"]
+# Same classes as the Esri 10 m Annual LULC map (minus "clouds"), which serves as the
+# independent reference in the case study.
+CLASSES = ["water", "trees", "flooded_vegetation", "crops", "rangeland", "built", "bare", "snow_ice"]
+CLASS_COLORS = ["#419bdf", "#397d49", "#7a87c6", "#e49635", "#e3e2c3", "#c4281b", "#a59b8f", "#a8ebff"]
 IGNORE = 255
 
 DW_BANDS = ["water", "trees", "grass", "flooded_vegetation", "crops",
             "shrub_and_scrub", "built", "bare", "snow_and_ice"]
-# Dynamic World class index -> project class index.
-# grass, flooded vegetation and shrub are merged: their backscatter is too similar in C-band.
-DW_TO_CLASS = [0, 1, 3, 3, 2, 3, 4, 5, IGNORE]
+# Dynamic World class index -> project class index. Grass and shrub/scrub become "rangeland"
+# (as in the Esri map): their C-band backscatter is too similar to separate reliably.
+DW_TO_CLASS = [0, 1, 4, 2, 3, 4, 5, 6, 7]
 
-CONF_MIN = 0.3       # pixels whose mean DW top-class probability is below this become IGNORE (0.5 removed almost all grass and bare)
+CONF_MIN = 0.3       # pixels whose mean DW top-class probability is below this become IGNORE
 MIN_LABELED = 0.5    # patches with fewer labelled pixels than this are dropped
 
 # --- Time ---------------------------------------------------------------------
@@ -43,34 +47,83 @@ def _months(year, months):
     return [f"{year}-{m:02d}" for m in months]
 
 # Every 2nd month, offset per year so that all 12 calendar months are covered.
-EXPORT_MONTHS = (_months(2024, [1, 3, 5, 7, 9, 11])
-                 + _months(2025, [2, 4, 6, 8, 10, 12])
-                 + _months(2026, [1, 3, 5, 7, 9]))
+TRAIN_MONTHS = _months(2023, [1, 3, 5, 7, 9, 11]) + _months(2024, [2, 4, 6, 8, 10, 12])
+TEST_MONTHS = _months(2025, [1, 3, 5, 7, 9, 11]) + _months(2026, [2, 4, 6, 8, 10])
+TEST_TEMPORAL_MONTHS = _months(2025, [3, 7, 11]) + _months(2026, [1, 5, 9])
+
+# split name -> (study-area split, months)
+#   test          : unseen regions in the future period (main test)
+#   test_temporal : training regions in the future period (only measures change over time)
+SPLITS = {
+    "train": ("train", TRAIN_MONTHS),
+    "val": ("val", TRAIN_MONTHS),
+    "test": ("test", TEST_MONTHS),
+    "test_temporal": ("train", TEST_TEMPORAL_MONTHS),
+}
 
 # --- Study areas (centre lat/lon, 20.48 km square) --------------------------------
-# Split is by region, never by patch, so test regions are completely unseen.
-# Case-study cities (Munich, Leipzig, Heidelberg) are deliberately not included.
+# Split is by region, never by patch. "orbit" is the Sentinel-1 pass with more scenes
+# over the area's period (scripts/choose_orbits.py, 2023-24 for train/val, 2025-26 for test).
+# Sahara, Okavango, Gobi and Kazakh steppe were replaced: no Sentinel-1 IW scenes in 2023-24.
 AOIS = {
-    # urban
-    "berlin":            dict(lat=52.520, lon=13.405, kind="urban",       split="train"),
-    "hamburg":           dict(lat=53.551, lon=9.994,  kind="urban",       split="train"),
-    "cologne":           dict(lat=50.938, lon=6.960,  kind="urban",       split="val"),
-    "frankfurt":         dict(lat=50.111, lon=8.682,  kind="urban",       split="test"),
-    # agriculture
-    "magdeburger_boerde": dict(lat=52.060, lon=11.400, kind="agriculture", split="train"),
-    "hildesheim_boerde": dict(lat=52.100, lon=10.050, kind="agriculture", split="train"),
-    "mecklenburg":       dict(lat=53.800, lon=12.200, kind="agriculture", split="train"),
-    "lower_bavaria":     dict(lat=48.850, lon=12.600, kind="agriculture", split="test"),
-    # forest
-    "black_forest":      dict(lat=47.900, lon=8.100,  kind="forest",      split="train"),
-    "bavarian_forest":   dict(lat=48.950, lon=13.400, kind="forest",      split="train"),
-    "harz":              dict(lat=51.790, lon=10.610, kind="forest",      split="val"),
-    "thuringian_forest": dict(lat=50.700, lon=10.730, kind="forest",      split="test"),
-    # water / wetland
-    "lake_constance":    dict(lat=47.680, lon=9.150,  kind="water",       split="train"),
-    "mueritz":           dict(lat=53.420, lon=12.700, kind="water",       split="train"),
-    "jade_bay":          dict(lat=53.480, lon=8.200,  kind="water",       split="val"),
-    # bare / open-pit mining
-    "garzweiler":        dict(lat=51.050, lon=6.500,  kind="mining",      split="train"),
-    "lusatia":           dict(lat=51.550, lon=14.350, kind="mining",      split="test"),
+    # --- train: Europe
+    "paris_fr":          dict(lat=48.857, lon=2.352,    kind="urban",       split="train", orbit="DESCENDING"),
+    "po_valley_it":      dict(lat=45.100, lon=10.000,   kind="crops",       split="train", orbit="ASCENDING"),
+    "black_forest_de":   dict(lat=47.900, lon=8.100,    kind="forest",      split="train", orbit="ASCENDING"),
+    "danube_delta_ro":   dict(lat=45.150, lon=29.300,   kind="wetland",     split="train", orbit="ASCENDING"),
+    "aletsch_ch":        dict(lat=46.480, lon=8.050,    kind="snow_ice",    split="train", orbit="ASCENDING"),
+    # --- train: North America
+    "chicago_us":        dict(lat=41.880, lon=-87.630,  kind="urban",       split="train", orbit="ASCENDING"),
+    "iowa_us":           dict(lat=42.000, lon=-93.500,  kind="crops",       split="train", orbit="ASCENDING"),
+    "everglades_us":     dict(lat=25.850, lon=-80.850,  kind="wetland",     split="train", orbit="ASCENDING"),
+    "black_rock_us":     dict(lat=40.850, lon=-119.100, kind="bare",        split="train", orbit="DESCENDING"),
+    # --- train: South America
+    "sao_paulo_br":      dict(lat=-23.550, lon=-46.630, kind="urban",       split="train", orbit="DESCENDING"),
+    "amazon_br":         dict(lat=-3.150, lon=-60.400,  kind="forest",      split="train", orbit="DESCENDING"),
+    "pampas_ar":         dict(lat=-34.600, lon=-61.000, kind="crops",       split="train", orbit="DESCENDING"),
+    # --- train: Africa
+    "lagos_ng":          dict(lat=6.520, lon=3.380,     kind="urban",       split="train", orbit="DESCENDING"),
+    "nile_delta_eg":     dict(lat=30.900, lon=31.100,   kind="crops",       split="train", orbit="DESCENDING"),
+    "western_desert_eg": dict(lat=29.300, lon=30.000,   kind="bare",        split="train", orbit="DESCENDING"),
+    "inner_niger_ml":    dict(lat=14.500, lon=-4.500,   kind="wetland",     split="train", orbit="ASCENDING"),
+    "maasai_mara_ke":    dict(lat=-1.450, lon=35.150,   kind="rangeland",   split="train", orbit="ASCENDING"),
+    "karoo_za":          dict(lat=-32.300, lon=22.500,  kind="rangeland",   split="train", orbit="ASCENDING"),
+    # --- train: Asia
+    "delhi_in":          dict(lat=28.610, lon=77.210,   kind="urban",       split="train", orbit="DESCENDING"),
+    "punjab_in":         dict(lat=30.600, lon=75.400,   kind="crops",       split="train", orbit="ASCENDING"),
+    "mekong_delta_vn":   dict(lat=10.000, lon=105.800,  kind="crops",       split="train", orbit="ASCENDING"),
+    "tokyo_jp":          dict(lat=35.680, lon=139.760,  kind="urban",       split="train", orbit="DESCENDING"),
+    "borneo_id":         dict(lat=0.500, lon=113.500,   kind="forest",      split="train", orbit="DESCENDING"),
+    "everest_np":        dict(lat=27.950, lon=86.920,   kind="snow_ice",    split="train", orbit="ASCENDING"),
+    "dasht_e_kavir_ir":  dict(lat=34.500, lon=54.500,   kind="bare",        split="train", orbit="DESCENDING"),
+    # --- train: Oceania
+    "sydney_au":         dict(lat=-33.870, lon=151.210, kind="urban",       split="train", orbit="DESCENDING"),
+    "riverina_au":       dict(lat=-34.600, lon=146.000, kind="crops",       split="train", orbit="DESCENDING"),
+
+    # --- validation
+    "madrid_es":         dict(lat=40.420, lon=-3.700,   kind="urban",       split="val", orbit="DESCENDING"),
+    "louisiana_us":      dict(lat=29.400, lon=-89.600,  kind="wetland",     split="val", orbit="ASCENDING"),
+    "ghana_forest_gh":   dict(lat=6.200, lon=-2.000,    kind="forest",      split="val", orbit="ASCENDING"),
+    "anatolia_tr":       dict(lat=39.000, lon=33.000,   kind="rangeland",   split="val", orbit="DESCENDING"),
+
+    # --- test (never used for training or model selection)
+    "dubai_ae":          dict(lat=25.200, lon=55.270,   kind="urban",       split="test", orbit="ASCENDING"),
+    "mexico_city_mx":    dict(lat=19.430, lon=-99.130,  kind="urban",       split="test", orbit="ASCENDING"),
+    "dhaka_bd":          dict(lat=23.810, lon=90.410,   kind="urban",       split="test", orbit="DESCENDING"),
+    "kansas_us":         dict(lat=38.000, lon=-98.000,  kind="crops",       split="test", orbit="ASCENDING"),
+    "canterbury_nz":     dict(lat=-43.600, lon=172.000, kind="crops",       split="test", orbit="DESCENDING"),
+    "gabon_forest_ga":   dict(lat=-0.500, lon=12.000,   kind="forest",      split="test", orbit="DESCENDING"),
+    "pantanal_br":       dict(lat=-18.000, lon=-57.000, kind="wetland",     split="test", orbit="DESCENDING"),
+    "atacama_cl":        dict(lat=-23.500, lon=-68.200, kind="bare",        split="test", orbit="DESCENDING"),
+    "vatnajokull_is":    dict(lat=64.400, lon=-16.700,  kind="snow_ice",    split="test", orbit="ASCENDING"),
 }
+
+
+def export_jobs(include_temporal=True):
+    """(aoi name, aoi dict, month) for every study-area month that has to be downloaded."""
+    jobs = []
+    for split, (aoi_split, months) in SPLITS.items():
+        if split == "test_temporal" and not include_temporal:
+            continue
+        jobs += [(n, a, m) for n, a in AOIS.items() if a["split"] == aoi_split for m in months]
+    return jobs

@@ -14,7 +14,7 @@ from pyproj import Transformer
 
 from . import config as C
 
-TILE_BANDS = C.S1_BANDS + ["label", "conf", "dw_n"]
+TILE_BANDS = C.S1_BANDS + ["dw_class", "conf", "dw_n"]
 
 
 def init(project=C.GEE_PROJECT):
@@ -49,7 +49,7 @@ def month_range(month):
 
 # --- Sentinel-1 -------------------------------------------------------------------
 
-def s1_collection(geom, start, end, orbit=C.ORBIT_PASS):
+def s1_collection(geom, start, end, orbit):
     """GRD scenes from GEE: already thermal-noise removed, calibrated to sigma0,
     terrain corrected (SRTM 30 m) and converted to dB."""
     return (ee.ImageCollection("COPERNICUS/S1_GRD")
@@ -80,7 +80,7 @@ def _prep_scene(img):
     return lee_filter(lin).copyProperties(img, ["system:time_start"])
 
 
-def s1_monthly(geom, month, orbit=C.ORBIT_PASS):
+def s1_monthly(geom, month, orbit):
     """Monthly median of speckle-filtered scenes, in dB, with the VV-VH ratio band."""
     start, end = month_range(month)
     lin = s1_collection(geom, start, end, orbit).map(_prep_scene).median()
@@ -97,29 +97,30 @@ def dw_collection(geom, start, end):
 def dw_monthly(geom, month):
     """Monthly label = argmax of the mean class probabilities over cloud-free DW observations.
 
-    Returns bands: label (project classes), conf (mean top-class probability), dw_n (observations).
+    Returns bands: dw_class (Dynamic World index 0-8), conf (mean top-class probability),
+    dw_n (observations). Mapping to project classes happens locally (patching.load_tile),
+    so the class scheme can change without downloading again.
     """
     start, end = month_range(month)
     col = dw_collection(geom, start, end)
     probs = col.select(C.DW_BANDS).mean()
-    dw_idx = probs.toArray().arrayArgmax().arrayGet([0])
-    label = dw_idx.remap(list(range(len(C.DW_BANDS))), C.DW_TO_CLASS).rename("label")
+    dw_class = probs.toArray().arrayArgmax().arrayGet([0]).rename("dw_class")
     conf = probs.reduce(ee.Reducer.max()).rename("conf")
     n = col.select("label").count().rename("dw_n")
-    return label.addBands(conf).addBands(n)
+    return dw_class.addBands(conf).addBands(n)
 
 
-def training_image(geom, month, orbit=C.ORBIT_PASS):
-    """S1 (dB x 100) + label + confidence (x 100) + DW observation count, as int16."""
+def training_image(geom, month, orbit):
+    """S1 (dB x 100) + DW class + confidence (x 100) + DW observation count, as int16."""
     s1 = s1_monthly(geom, month, orbit).multiply(C.DB_SCALE).round().unmask(C.S1_NODATA)
     dw = dw_monthly(geom, month)
-    return (s1.addBands(dw.select("label").unmask(C.IGNORE))
+    return (s1.addBands(dw.select("dw_class").unmask(C.IGNORE))
               .addBands(dw.select("conf").multiply(100).round().unmask(0))
               .addBands(dw.select("dw_n").unmask(0))
               .toInt16())
 
 
-def month_counts(geom, month, orbit=C.ORBIT_PASS):
+def month_counts(geom, month, orbit):
     start, end = month_range(month)
     return ee.Dictionary({
         "s1": s1_collection(geom, start, end, orbit).size(),
@@ -163,11 +164,12 @@ def download_tile(image, epsg, x0, y0, out_path, size_px=C.TILE_PX, band_names=N
     tmp.rename(out_path)
 
 
-def export_aoi_month(name, aoi, month, raw_dir=C.RAW_DIR, orbit=C.ORBIT_PASS):
-    """Download all tiles of one study area for one month. Skips tiles that already exist."""
+def export_aoi_month(name, aoi, month, raw_dir=C.RAW_DIR):
+    """Download all tiles of one study area for one month (in its own orbit pass). Skips existing tiles."""
+    orbit = aoi["orbit"]
     epsg, x0, y0 = aoi_grid(aoi["lat"], aoi["lon"])
     geom = grid_geometry(epsg, x0, y0, C.AOI_PX, C.AOI_PX)
-    log = dict(aoi=name, month=month, **month_counts(geom, month, orbit), tiles=0, status="ok")
+    log = dict(aoi=name, month=month, orbit=orbit, **month_counts(geom, month, orbit), tiles=0, status="ok")
     if log["s1"] == 0 or log["dw"] == 0:
         log["status"] = "skipped: no S1 or DW images"
         return log

@@ -1,6 +1,6 @@
 # LULC from Sentinel-1
 
-Land use / land cover segmentation using Sentinel-1 SAR as the only input (TensorFlow), plus a prototype
+Global land use / land cover segmentation (8 classes) using Sentinel-1 SAR as the only input (TensorFlow), plus a prototype
 that maps a location over 12 months and reports class percentages and changes.
 
 ## Setup

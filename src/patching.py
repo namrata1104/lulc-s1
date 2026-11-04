@@ -7,6 +7,10 @@ import rasterio
 
 from . import config as C
 
+# Dynamic World index (0-8, 255 = no data) -> project class
+DW_LUT = np.full(256, C.IGNORE, np.uint8)
+DW_LUT[:len(C.DW_TO_CLASS)] = C.DW_TO_CLASS
+
 
 def load_tile(path):
     """Return S1 (H, W, 3) float32 in dB (NaN = no-data) and label (H, W) uint8 with IGNORE applied."""
@@ -15,7 +19,7 @@ def load_tile(path):
     s1 = a[:3].transpose(1, 2, 0).astype(np.float32)
     s1[s1 == C.S1_NODATA] = np.nan
     s1 /= C.DB_SCALE
-    label, conf, dw_n = a[3], a[4], a[5]
+    label, conf, dw_n = DW_LUT[a[3].astype(np.uint8)], a[4], a[5]
     unreliable = (conf < C.CONF_MIN * 100) | (dw_n < 1)
     label = np.where(unreliable, C.IGNORE, label).astype(np.uint8)
     return s1, label
@@ -33,15 +37,16 @@ def patch_windows(s1, label, p=C.PATCH_PX):
             yield r, c
 
 
-def build_split(split, raw_dir=C.RAW_DIR, out_dir=C.PATCH_DIR, months=None):
+def build_split(split, raw_dir=C.RAW_DIR, out_dir=C.PATCH_DIR):
     """Write X_<split>.npy (N, 256, 256, 3) float16 dB, y_<split>.npy (N, 256, 256) uint8, meta_<split>.csv.
 
-    Two passes so the arrays are written straight to disk (memmap) instead of held in RAM.
+    The split's study areas and months come from config.SPLITS. Two passes so the arrays are
+    written straight to disk (memmap) instead of held in RAM.
     """
-    names = [n for n, a in C.AOIS.items() if a["split"] == split]
-    tiles = sorted(p for n in names for p in (raw_dir / n).glob("*.tif"))
-    if months is not None:
-        tiles = [t for t in tiles if t.stem.split("_")[-2] in months]
+    aoi_split, months = C.SPLITS[split]
+    names = [n for n, a in C.AOIS.items() if a["split"] == aoi_split]
+    tiles = sorted(p for n in names for p in (raw_dir / n).glob("*.tif")
+                   if p.stem.split("_")[-2] in months)
 
     meta = []
     for path in tiles:
@@ -90,3 +95,15 @@ def normalisation_stats(out_dir=C.PATCH_DIR):
                  std=np.sqrt(s2 / n - mean ** 2).tolist())
     (out_dir / "stats.json").write_text(json.dumps(stats, indent=2))
     return stats
+
+
+def find_unreadable(raw_dir=C.RAW_DIR):
+    """Tiles that cannot be read completely (e.g. interrupted downloads)."""
+    bad = []
+    for path in sorted(raw_dir.rglob("*.tif")):
+        try:
+            with rasterio.open(path) as src:
+                src.read()
+        except Exception:
+            bad.append(path)
+    return bad

@@ -4,6 +4,7 @@
     tail -f export.log
 
 Resumable: tiles that already exist are skipped.
+Add --no-temporal to skip the optional training-regions-in-2025/26 split (test_temporal).
 """
 import sys
 import time
@@ -16,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src import config as C, gee_data as G  # noqa: E402
 
 G.init()
-jobs = [(n, a, m) for n, a in C.AOIS.items() for m in C.EXPORT_MONTHS]
+jobs = C.export_jobs(include_temporal="--no-temporal" not in sys.argv)
 print(f"{len(jobs)} area-months", flush=True)
 
 logs, t0 = [], time.time()
