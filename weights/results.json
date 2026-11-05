@@ -1,0 +1,139 @@
+{
+  "selected_model": "deeplabv3plus",
+  "classes": [
+    "water",
+    "trees",
+    "flooded_vegetation",
+    "crops",
+    "rangeland",
+    "built",
+    "bare",
+    "snow_ice"
+  ],
+  "training": {
+    "baseline_cnn": {
+      "params": 75624.0,
+      "epochs_run": 18.0,
+      "minutes": 31.7,
+      "best_epoch": 10.0,
+      "train_mIoU": 0.3374,
+      "val_mIoU": 0.306,
+      "gap": 0.0313,
+      "verdict": "underfitting: low mIoU even on training data - the model lacks capacity or context"
+    },
+    "unet": {
+      "params": 7855720.0,
+      "epochs_run": 25.0,
+      "minutes": 76.8,
+      "best_epoch": 17.0,
+      "train_mIoU": 0.5934,
+      "val_mIoU": 0.3813,
+      "gap": 0.2121,
+      "verdict": "overfitting: clearly better on training than on validation regions"
+    },
+    "deeplabv3plus": {
+      "params": 11853896.0,
+      "epochs_run": 24.0,
+      "minutes": 93.7,
+      "best_epoch": 16.0,
+      "train_mIoU": 0.6189,
+      "val_mIoU": 0.3989,
+      "gap": 0.22,
+      "verdict": "overfitting: clearly better on training than on validation regions"
+    }
+  },
+  "test": {
+    "baseline_cnn": {
+      "OA": 0.41946433100207237,
+      "mIoU": 0.20333633215491564,
+      "mF1": 0.3031291509946446,
+      "per_class_IoU": {
+        "water": 0.2797,
+        "trees": 0.3378,
+        "flooded_vegetation": 0.0061,
+        "crops": 0.2068,
+        "rangeland": 0.2693,
+        "built": 0.5149,
+        "bare": 0.0107,
+        "snow_ice": 0.0014
+      },
+      "per_class_F1": {
+        "water": 0.4372,
+        "trees": 0.505,
+        "flooded_vegetation": 0.0122,
+        "crops": 0.3427,
+        "rangeland": 0.4243,
+        "built": 0.6798,
+        "bare": 0.0211,
+        "snow_ice": 0.0028
+      }
+    },
+    "unet": {
+      "OA": 0.4962854627684268,
+      "mIoU": 0.27458550165860063,
+      "mF1": 0.36500969030634967,
+      "per_class_IoU": {
+        "water": 0.3342,
+        "trees": 0.3331,
+        "flooded_vegetation": 0.0013,
+        "crops": 0.5071,
+        "rangeland": 0.1764,
+        "built": 0.8243,
+        "bare": 0.0079,
+        "snow_ice": 0.0125
+      },
+      "per_class_F1": {
+        "water": 0.5009,
+        "trees": 0.4997,
+        "flooded_vegetation": 0.0026,
+        "crops": 0.673,
+        "rangeland": 0.2998,
+        "built": 0.9037,
+        "bare": 0.0158,
+        "snow_ice": 0.0246
+      }
+    },
+    "deeplabv3plus": {
+      "OA": 0.5104033889482813,
+      "mIoU": 0.3043018712383649,
+      "mF1": 0.40161939818331915,
+      "per_class_IoU": {
+        "water": 0.3643,
+        "trees": 0.5407,
+        "flooded_vegetation": 0.0038,
+        "crops": 0.4553,
+        "rangeland": 0.2691,
+        "built": 0.7788,
+        "bare": 0.0207,
+        "snow_ice": 0.0017
+      },
+      "per_class_F1": {
+        "water": 0.534,
+        "trees": 0.7019,
+        "flooded_vegetation": 0.0077,
+        "crops": 0.6257,
+        "rangeland": 0.4241,
+        "built": 0.8756,
+        "bare": 0.0405,
+        "snow_ice": 0.0034
+      }
+    }
+  },
+  "test_temporal": {
+    "baseline_cnn": {
+      "OA": 0.5568804025620816,
+      "mIoU": 0.33231132844103456,
+      "mean F1": 0.4737651885522537
+    },
+    "unet": {
+      "OA": 0.7819773466671336,
+      "mIoU": 0.5758540449644433,
+      "mean F1": 0.7190015833890826
+    },
+    "deeplabv3plus": {
+      "OA": 0.7550939423643296,
+      "mIoU": 0.5644864802233496,
+      "mean F1": 0.7160083715516631
+    }
+  }
+}
