@@ -117,7 +117,82 @@ def deeplabv3plus(dropout=0.3):
     return keras.Model(encoder.input, segmentation_head(x), name="deeplabv3plus")
 
 
+# --- 4. DeepLabV3+ / AE-DeepLabV3+ with exchangeable backbones (experiments, notebook 03) ---------------
+
+# high: last layer at 1/16 resolution (end of the second-to-last stage); low: 1/4-resolution features
+BACKBONES = {
+    "resnet101": dict(app=keras.applications.ResNet101, high="conv4_block23_out", low="conv2_block3_out"),
+    "resnet152": dict(app=keras.applications.ResNet152, high="conv4_block36_out", low="conv2_block3_out"),
+    "xception": dict(app=keras.applications.Xception, high="block13_sepconv2_bn", low="block3_sepconv2_bn"),
+}
+
+
+def spatial(t):
+    return t.shape[1], t.shape[2]
+
+
+def atrous_encoder(encoder, high, rate=2):
+    """Atrous version of a backbone: the last stage keeps 1/16 resolution. Layers that would down-sample
+    from 1/16 to 1/32 get stride 1, and the convolutions after them get dilation `rate`, so they still see
+    the same (pretrained) neighbourhood. Weights are copied unchanged."""
+    s16 = spatial(encoder.get_layer(high).output)
+    unstride, dilate = set(), set()
+    for layer in encoder.layers:
+        cfg = layer.get_config()
+        if not hasattr(layer, "input") or isinstance(layer.input, list):
+            continue
+        size_in = spatial(layer.input)
+        if cfg.get("strides") in [(2, 2), [2, 2]] and size_in == s16:
+            unstride.add(layer.name)
+        elif "dilation_rate" in cfg and max(cfg["kernel_size"]) > 1 and size_in[0] < s16[0]:
+            dilate.add(layer.name)
+
+    def clone(layer):
+        cfg = layer.get_config()
+        if layer.name in unstride:
+            cfg["strides"] = (1, 1)
+        if layer.name in dilate:
+            cfg["dilation_rate"] = (rate, rate)
+        return layer.__class__.from_config(cfg)
+
+    atrous = keras.models.clone_model(encoder, clone_function=clone)
+    atrous.set_weights(encoder.get_weights())
+    return atrous
+
+
+def deeplab(backbone, atrous=False, dropout=0.3):
+    """DeepLabV3+ on an ImageNet-pretrained backbone.
+
+    atrous=False  DeepLabV3+: backbone cut after the 1/16 stage (the last stage is not used).
+    atrous=True   AE-DeepLabV3+ (atrous encoder): the full backbone; its last stage uses dilated instead of
+                  strided convolutions, so features stay at 1/16 resolution but come from a deeper network
+                  with a larger receptive field (output stride 16, as in Chen et al. 2017/2018).
+    """
+    spec = BACKBONES[backbone]
+    encoder = spec["app"](include_top=False, weights="imagenet", input_shape=INPUT_SHAPE)
+    if atrous:
+        encoder = atrous_encoder(encoder, spec["high"])
+        high = encoder.output
+    else:
+        high = encoder.get_layer(spec["high"]).output
+    low = encoder.get_layer(spec["low"]).output
+
+    x = aspp(high)
+    x = layers.Dropout(dropout, name="aspp_drop")(x)
+    x = layers.Resizing(*spatial(low), interpolation="bilinear", name="dec_up_low")(x)
+    low = conv_bn_relu(low, 48, kernel=1, name="dec_low")
+    x = layers.Concatenate(name="dec_cat")([x, low])
+    x = conv_bn_relu(x, 256, name="dec_a")
+    x = conv_bn_relu(x, 256, name="dec_b")
+    x = layers.Resizing(*INPUT_SHAPE[:2], interpolation="bilinear", name="dec_up_final")(x)
+    name = f"{'ae_' if atrous else ''}deeplabv3plus_{backbone}"
+    return keras.Model(encoder.input, segmentation_head(x), name=name)
+
+
 MODELS = {"baseline_cnn": baseline_cnn, "unet": unet, "deeplabv3plus": deeplabv3plus}
+for _b in BACKBONES:
+    MODELS[f"deeplabv3plus_{_b}"] = lambda b=_b: deeplab(b, atrous=False)
+    MODELS[f"ae_deeplabv3plus_{_b}"] = lambda b=_b: deeplab(b, atrous=True)
 
 
 # --- Loss -------------------------------------------------------------------------------

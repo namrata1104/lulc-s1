@@ -8,3 +8,6 @@ export.log
 weights/*_ckpt.keras
 weights/smoke_test/
 training.log
+weights/experiments/*.keras
+weights/experiments_smoke_test/
+experiments.log
