@@ -130,8 +130,9 @@ def month_counts(geom, month, orbit):
 
 # --- Download ---------------------------------------------------------------------
 
-def download_tile(image, epsg, x0, y0, out_path, size_px=C.TILE_PX, band_names=None, retries=4):
-    """Fetch one tile on an exact UTM grid with computePixels and save it as compressed GeoTIFF."""
+def compute_pixels(image, epsg, x0, y0, size_px, retries=4):
+    """GeoTIFF bytes of a size_px x size_px square on the exact 10 m UTM grid with top-left (x0, y0).
+    Retries with back-off, e.g. when the project is rate-limited."""
     request = {
         "expression": image,
         "fileFormat": "GEO_TIFF",
@@ -144,13 +145,22 @@ def download_tile(image, epsg, x0, y0, out_path, size_px=C.TILE_PX, band_names=N
     }
     for attempt in range(retries):
         try:
-            data = ee.data.computePixels(request)
-            break
+            return ee.data.computePixels(request)
         except ee.EEException:
             if attempt == retries - 1:
                 raise
             time.sleep(5 * 2 ** attempt)
 
+
+def fetch_array(image, epsg, x0, y0, size_px):
+    """Like compute_pixels, but returns a (bands, H, W) numpy array instead of a file."""
+    with MemoryFile(compute_pixels(image, epsg, x0, y0, size_px)) as mem, mem.open() as src:
+        return src.read()
+
+
+def download_tile(image, epsg, x0, y0, out_path, size_px=C.TILE_PX, band_names=None):
+    """Fetch one tile and save it as compressed GeoTIFF."""
+    data = compute_pixels(image, epsg, x0, y0, size_px)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # unique temp name, so two exports running at once can never write into the same file
     tmp = out_path.with_name(f"{out_path.stem}.{os.getpid()}.{threading.get_ident()}.part")

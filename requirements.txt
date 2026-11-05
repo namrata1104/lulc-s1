@@ -12,5 +12,8 @@ matplotlib>=3.8
 tqdm>=4.66
 ipykernel>=6.29
 
-# training (installed on the GPU machine)
+# model (training and prototype)
 tensorflow>=2.16
+
+# prototype
+streamlit>=1.40
