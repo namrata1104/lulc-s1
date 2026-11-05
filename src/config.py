@@ -1,4 +1,5 @@
 """Project-wide settings: GEE project, study areas, classes, periods, grid."""
+import os
 from pathlib import Path
 
 GEE_PROJECT = "lulc-sentinel-1"
@@ -6,7 +7,7 @@ GEE_PROJECT = "lulc-sentinel-1"
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw_global"          # GeoTIFF tiles downloaded from GEE
-PATCH_DIR = DATA_DIR / "patches_global"    # 256x256 numpy patches per split
+PATCH_DIR = Path(os.environ.get("LULC_PATCH_DIR", DATA_DIR / "patches_global"))   # 256x256 numpy patches per split
 
 # --- Sentinel-1 -------------------------------------------------------------
 # One pass per study area: mixing passes changes the incidence angle -> fake change.

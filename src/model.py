@@ -1,4 +1,10 @@
-"""Segmentation models, loss and input normalisation (shared by training and the prototype)."""
+"""Segmentation models, loss and input normalisation (shared by training and the prototype).
+
+Three models of increasing capacity, compared in notebook 02:
+  baseline_cnn   - plain CNN, no down-sampling, only local context (~90 m)
+  unet           - encoder-decoder with skip connections, trained from scratch
+  deeplabv3plus  - ImageNet-pretrained ResNet50 + atrous spatial pyramid pooling (multi-scale context)
+"""
 import json
 
 import numpy as np
@@ -9,6 +15,7 @@ from tensorflow.keras import layers
 from . import config as C
 
 NUM_CLASSES = len(C.CLASSES)
+INPUT_SHAPE = (C.PATCH_PX, C.PATCH_PX, len(C.S1_BANDS))
 
 
 # --- Normalisation ------------------------------------------------------------------
@@ -29,19 +36,11 @@ def normalise(x, stats):
 
 # --- Building blocks ------------------------------------------------------------------
 
-def conv_block(x, filters, name):
-    for i in range(2):
-        x = layers.Conv2D(filters, 3, padding="same", use_bias=False, name=f"{name}_conv{i}")(x)
-        x = layers.BatchNormalization(name=f"{name}_bn{i}")(x)
-        x = layers.ReLU(name=f"{name}_relu{i}")(x)
-    return x
-
-
-def decoder_block(x, skip, filters, name):
-    x = layers.UpSampling2D(2, interpolation="bilinear", name=f"{name}_up")(x)
-    if skip is not None:
-        x = layers.Concatenate(name=f"{name}_cat")([x, skip])
-    return conv_block(x, filters, name)
+def conv_bn_relu(x, filters, kernel=3, dilation=1, name=None):
+    x = layers.Conv2D(filters, kernel, padding="same", dilation_rate=dilation, use_bias=False,
+                      name=f"{name}_conv")(x)
+    x = layers.BatchNormalization(name=f"{name}_bn")(x)
+    return layers.ReLU(name=f"{name}_relu")(x)
 
 
 def segmentation_head(x):
@@ -49,37 +48,76 @@ def segmentation_head(x):
     return layers.Activation("softmax", dtype="float32", name="probs")(x)   # float32 under mixed precision
 
 
-# --- Model A: U-Net from scratch -------------------------------------------------------------
+# --- 1. Baseline: plain CNN -----------------------------------------------------------------
 
-def unet(input_shape=(C.PATCH_PX, C.PATCH_PX, 3), filters=(32, 64, 128, 256, 512), dropout=0.3):
-    """Classic U-Net (Ronneberger et al. 2015) with batch norm."""
-    inp = keras.Input(input_shape)
+def baseline_cnn(filters=(32, 64, 64, 32)):
+    """Four 3x3 conv layers at full resolution. Receptive field 9x9 pixels (90 m): the model sees the
+    backscatter and texture around a pixel, but no wider spatial context or object shapes."""
+    inp = keras.Input(INPUT_SHAPE)
+    x = inp
+    for i, f in enumerate(filters):
+        x = conv_bn_relu(x, f, name=f"block{i}")
+    return keras.Model(inp, segmentation_head(x), name="baseline_cnn")
+
+
+# --- 2. U-Net -----------------------------------------------------------------------------
+
+def unet(filters=(32, 64, 128, 256, 512), dropout=0.3):
+    """U-Net (Ronneberger et al. 2015) with batch norm. The encoder halves the resolution four times
+    (receptive field > 2 km); skip connections bring the fine detail back for sharp boundaries."""
+    inp = keras.Input(INPUT_SHAPE)
     x, skips = inp, []
     for i, f in enumerate(filters[:-1]):
-        x = conv_block(x, f, f"enc{i}")
+        x = conv_bn_relu(x, f, name=f"enc{i}a")
+        x = conv_bn_relu(x, f, name=f"enc{i}b")
         skips.append(x)
         x = layers.MaxPooling2D(name=f"enc{i}_pool")(x)
-    x = conv_block(x, filters[-1], "bottleneck")
+    x = conv_bn_relu(x, filters[-1], name="bottleneck_a")
+    x = conv_bn_relu(x, filters[-1], name="bottleneck_b")
     x = layers.SpatialDropout2D(dropout, name="bottleneck_drop")(x)
     for i, (f, skip) in enumerate(zip(reversed(filters[:-1]), reversed(skips))):
-        x = decoder_block(x, skip, f, f"dec{i}")
-    return keras.Model(inp, segmentation_head(x), name="unet_scratch")
+        x = layers.UpSampling2D(2, interpolation="bilinear", name=f"dec{i}_up")(x)
+        x = layers.Concatenate(name=f"dec{i}_cat")([x, skip])
+        x = conv_bn_relu(x, f, name=f"dec{i}a")
+        x = conv_bn_relu(x, f, name=f"dec{i}b")
+    return keras.Model(inp, segmentation_head(x), name="unet")
 
 
-# --- Model B: U-Net with ImageNet-pretrained ResNet50 encoder ------------------------------------
+# --- 3. DeepLabV3+ -------------------------------------------------------------------------
 
-RESNET_SKIPS = ["conv1_relu", "conv2_block3_out", "conv3_block4_out", "conv4_block6_out"]  # 1/2 .. 1/16
+def aspp(x, filters=256, rates=(6, 12, 18)):
+    """Atrous spatial pyramid pooling: parallel dilated convolutions see the same location at several
+    scales at once (a field vs. a whole farm landscape), plus a global image-level branch."""
+    h, w = x.shape[1], x.shape[2]
+    pool = layers.GlobalAveragePooling2D(keepdims=True, name="aspp_pool")(x)
+    pool = conv_bn_relu(pool, filters, kernel=1, name="aspp_pool")
+    pool = layers.UpSampling2D((h, w), interpolation="bilinear", name="aspp_pool_up")(pool)
+    branches = [conv_bn_relu(x, filters, kernel=1, name="aspp_1x1")]
+    branches += [conv_bn_relu(x, filters, dilation=r, name=f"aspp_d{r}") for r in rates]
+    x = layers.Concatenate(name="aspp_cat")(branches + [pool])
+    return conv_bn_relu(x, filters, kernel=1, name="aspp_out")
 
 
-def resnet50_unet(input_shape=(C.PATCH_PX, C.PATCH_PX, 3), decoder_filters=(256, 128, 64, 32, 16)):
-    """U-Net decoder on a ResNet50 encoder. The three SAR channels are fed in place of RGB; the
-    pretrained filters give a better starting point for edges and textures than random weights."""
-    encoder = keras.applications.ResNet50(include_top=False, weights="imagenet", input_shape=input_shape)
-    skips = [encoder.get_layer(n).output for n in reversed(RESNET_SKIPS)] + [None]
-    x = encoder.output                                                    # 1/32
-    for i, (f, skip) in enumerate(zip(decoder_filters, skips)):
-        x = decoder_block(x, skip, f, f"dec{i}")
-    return keras.Model(encoder.input, segmentation_head(x), name="unet_resnet50")
+def deeplabv3plus(dropout=0.3):
+    """DeepLabV3+ (Chen et al. 2018) on an ImageNet-pretrained ResNet50. The three SAR channels are fed
+    in place of RGB: the pretrained filters (edges, textures) are a better starting point than random
+    weights and are fine-tuned to SAR."""
+    encoder = keras.applications.ResNet50(include_top=False, weights="imagenet", input_shape=INPUT_SHAPE)
+    high = encoder.get_layer("conv4_block6_2_relu").output     # 1/16 resolution, deep features
+    low = encoder.get_layer("conv2_block3_2_relu").output      # 1/4 resolution, fine detail
+
+    x = aspp(high)
+    x = layers.Dropout(dropout, name="aspp_drop")(x)
+    x = layers.UpSampling2D(4, interpolation="bilinear", name="dec_up4")(x)
+    low = conv_bn_relu(low, 48, kernel=1, name="dec_low")
+    x = layers.Concatenate(name="dec_cat")([x, low])
+    x = conv_bn_relu(x, 256, name="dec_a")
+    x = conv_bn_relu(x, 256, name="dec_b")
+    x = layers.UpSampling2D(4, interpolation="bilinear", name="dec_up_final")(x)
+    return keras.Model(encoder.input, segmentation_head(x), name="deeplabv3plus")
+
+
+MODELS = {"baseline_cnn": baseline_cnn, "unet": unet, "deeplabv3plus": deeplabv3plus}
 
 
 # --- Loss -------------------------------------------------------------------------------
