@@ -2,7 +2,8 @@
 #
 #     nohup bash scripts/kaggle_upload.sh > kaggle_upload.log 2>&1 &
 #
-# Needs the Kaggle API key in ~/vault/.kaggle/kaggle.json (kaggle.com -> Settings -> API -> Create New Token).
+# Needs Kaggle credentials in ~/vault/.kaggle/ - either kaggle.json (legacy API key) or the newer API token saved as
+# access_token together with your Kaggle user name in username (kaggle.com -> Settings -> API).
 # Packs data/raw_global (Earth Engine tiles) and data/patches_global (256 x 256 patches, without the derived
 # multi-temporal arrays) into two zip files in ~/vault/kaggle_upload and creates a public Kaggle dataset.
 # Re-running skips zip files that already exist.
@@ -14,13 +15,20 @@ export KAGGLE_CONFIG_DIR="$VAULT/.kaggle"
 STAGE="$VAULT/kaggle_upload"
 SLUG="sentinel1-lulc-global"
 
-if [ ! -f "$KAGGLE_CONFIG_DIR/kaggle.json" ]; then
-    echo "Missing $KAGGLE_CONFIG_DIR/kaggle.json - download it from kaggle.com -> Settings -> API -> Create New Token"
+python -m pip install -q --upgrade kaggle
+if [ -f "$KAGGLE_CONFIG_DIR/kaggle.json" ]; then
+    chmod 600 "$KAGGLE_CONFIG_DIR/kaggle.json"
+    KUSER=$(python -c "import json, os; print(json.load(open(os.path.join(os.environ['KAGGLE_CONFIG_DIR'], 'kaggle.json')))['username'])")
+elif [ -f "$KAGGLE_CONFIG_DIR/access_token" ] && [ -f "$KAGGLE_CONFIG_DIR/username" ]; then
+    chmod 600 "$KAGGLE_CONFIG_DIR/access_token"
+    export KAGGLE_API_TOKEN="$(tr -d '[:space:]' < "$KAGGLE_CONFIG_DIR/access_token")"
+    KUSER="$(tr -d '[:space:]' < "$KAGGLE_CONFIG_DIR/username")"
+    export KAGGLE_USERNAME="$KUSER"
+else
+    echo "No Kaggle credentials in $KAGGLE_CONFIG_DIR (kaggle.json, or access_token + username)"
     exit 1
 fi
-chmod 600 "$KAGGLE_CONFIG_DIR/kaggle.json"
-python -m pip install -q kaggle
-KUSER=$(python -c "import json, os; print(json.load(open(os.path.join(os.environ['KAGGLE_CONFIG_DIR'], 'kaggle.json')))['username'])")
+kaggle datasets list --mine > /dev/null && echo "Kaggle login OK as $KUSER" || { echo "Kaggle login failed"; exit 1; }
 mkdir -p "$STAGE"
 
 echo "$(date +%H:%M) packing ..."
