@@ -169,8 +169,11 @@ with tab_change:
                 "e.g. built-up going from 40 % to 42 % is +2.0 pp.")
     c1, c2 = st.columns([3, 2])
     with c1:
-        st.markdown("**Month-to-month change**")
-        mtm = r["month_to_month"].iloc[1:].rename(index=plots.month_label)
+        st.markdown("**Month-to-month change** (each row: share in the later month minus share in the earlier "
+                    "month; the first month has no predecessor)")
+        mtm = r["month_to_month"].iloc[1:]
+        mtm.index = [f"{plots.month_label(a)} → {plots.month_label(b)}" for a, b in zip(r["months"][:-1], r["months"][1:])]
+        mtm.index.name = "change"
         st.dataframe(mtm.style.format("{:+.1f}").background_gradient(cmap="RdBu", vmin=-10, vmax=10),
                      width="stretch")
     with c2:
@@ -179,7 +182,9 @@ with tab_change:
     st.info("Radar responds to soil moisture, crop growth and flooding, so part of the month-to-month "
             "change is seasonal or classification noise rather than real land-use change. Turn on "
             "temporal smoothing to see how much of it disappears.")
-    changes = pd.concat({"month_to_month_pp": r["month_to_month"], "total_pp": r["total"].to_frame().T}).round(3)
+    mtm_csv = r["month_to_month"].iloc[1:].copy()
+    mtm_csv.index = [f"{a} -> {b}" for a, b in zip(r["months"][:-1], r["months"][1:])]
+    changes = pd.concat({"month_to_month_pp": mtm_csv, "total_pp": r["total"].to_frame().T}).round(3)
     st.download_button("Download changes (CSV)", changes.to_csv().encode(), "class_changes.csv")
 
 with tab_ref:
