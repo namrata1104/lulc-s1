@@ -127,5 +127,6 @@
       "pantanal_br": -0.0856,
       "vatnajokull_is": -0.0048
     }
-  }
+  },
+  "selected_for_prototype": "single month (validation difference 0.005 is within noise; see Findings)"
 }
