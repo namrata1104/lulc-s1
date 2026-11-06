@@ -35,15 +35,17 @@ def show_map(ax, label, title=None):
 
 def maps_grid(maps, months, ncols=4, title=None):
     rows = int(np.ceil(len(months) / ncols))
-    fig, axes = plt.subplots(rows, ncols, figsize=(3.6 * ncols, 4.0 * rows + 0.8))
+    height = 3.9 * rows + 1.3
+    fig, axes = plt.subplots(rows, ncols, figsize=(3.6 * ncols, height),
+                             gridspec_kw=dict(hspace=0.22, wspace=0.05))
+    fig.subplots_adjust(left=0.01, right=0.99, top=1 - 0.75 / height, bottom=0.6 / height)
     for ax in axes.ravel()[len(months):]:
         ax.axis("off")
     for ax, m in zip(axes.ravel(), months):
         show_map(ax, maps[m], month_label(m))
     if title:
-        fig.suptitle(title, fontsize=13)
-    class_legend(fig, ncol=N // 2 if ncols < 4 else N)
-    fig.tight_layout(rect=(0, 0.05, 1, 0.97), h_pad=1.5)
+        fig.suptitle(title, fontsize=13, y=1 - 0.2 / height)
+    class_legend(fig, ncol=N // 2 if ncols < 4 else N, y=0.05 / height)
     return fig
 
 
