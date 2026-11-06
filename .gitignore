@@ -14,3 +14,6 @@ experiments.log
 *.csv
 !weights/**/*.csv
 kaggle_upload.log
+report/*.log
+report/*.xdv
+report/*.aux
