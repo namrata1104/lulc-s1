@@ -15,7 +15,8 @@ def confusion(y_true, y_pred, n=NUM_CLASSES):
     return np.bincount(n * y_true[keep].astype(np.int64) + y_pred[keep], minlength=n * n).reshape(n, n)
 
 
-def scores(cm):
+def scores(cm, classes=None):
+    """Metrics from a confusion matrix; `classes` names its rows (default: the 8 project classes)."""
     cm = cm.astype(np.float64)
     tp = np.diag(cm)
     ref, pred = cm.sum(1), cm.sum(0)
@@ -25,7 +26,7 @@ def scores(cm):
         recall = tp / ref
         f1 = 2 * tp / (ref + pred)
     per_class = pd.DataFrame({"IoU": iou, "precision": precision, "recall": recall, "F1": f1,
-                              "support_%": 100 * ref / ref.sum()}, index=C.CLASSES)
+                              "support_%": 100 * ref / ref.sum()}, index=classes or C.CLASSES)
     present = ref > 0
     return dict(OA=tp.sum() / cm.sum(), mIoU=np.nanmean(iou[present]),
                 mF1=np.nanmean(f1[present]), per_class=per_class)
