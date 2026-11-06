@@ -109,7 +109,7 @@ lat, lon, start, size_px, smooth = params
 n_data = sum(r["maps"][m] is not None for m in r["months"])
 st.subheader(f"{lat:.4f}, {lon:.4f} · {plots.month_label(r['months'][0])} – {plots.month_label(r['months'][-1])}")
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Area", f"{r['size_km']:.2f} × {r['size_km']:.2f} km")
+m1.metric("Area (square)", f"{r['size_km']:.2f} km")
 m2.metric("Months with data", f"{n_data} / 12")
 m3.metric("Orbit pass", r["orbit"].title())
 m4.metric("Sentinel-1 scenes used", sum(r["scenes"].values()))
