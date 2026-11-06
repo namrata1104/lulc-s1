@@ -40,6 +40,12 @@ DW_BANDS = ["water", "trees", "grass", "flooded_vegetation", "crops",
 # (as in the Esri map): their C-band backscatter is too similar to separate reliably.
 DW_TO_CLASS = [0, 1, 4, 2, 3, 4, 5, 6, 7]
 
+# Radar-separable scheme (notebook 05): the two pairs that C-band SAR cannot separate physically are merged,
+# crops + rangeland -> low vegetation, bare + snow/ice -> bare/snow. Used as an optional view in the prototype.
+MERGED_CLASSES = ["water", "trees", "flooded_vegetation", "low_vegetation", "built", "bare_snow"]
+MERGED_COLORS = ["#419bdf", "#397d49", "#7a87c6", "#d1b26f", "#c4281b", "#c9c3bb"]
+TO_MERGED = [0, 1, 2, 3, 3, 4, 5, 5]      # project class index -> merged class index
+
 CONF_MIN = 0.3       # pixels whose mean DW top-class probability is below this become IGNORE
 MIN_LABELED = 0.5    # patches with fewer labelled pixels than this are dropped
 

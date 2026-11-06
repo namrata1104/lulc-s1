@@ -98,6 +98,10 @@ size_label = st.sidebar.radio("Area (square, centred on the point)", list(SIZES)
 smooth = st.sidebar.checkbox("Temporal smoothing (3-month majority)", value=False,
                              help="Removes one-month class flicker caused by classification noise. "
                                   "Compare with and without to see how noise inflates change percentages.")
+merge = st.sidebar.checkbox("Merge classes radar cannot separate (6 classes)", value=False,
+                            help="Shows the same prediction with crops + rangeland as 'low vegetation' and bare + "
+                                 "snow/ice as 'bare / snow'. C-band radar confuses these pairs; merged, the test "
+                                 "accuracy rises from 51 % to 72 % (notebook 05). Switching needs no new run.")
 
 last = f"{end_year}-{end_month:02d}"
 valid_period = months[-1] <= last
@@ -137,6 +141,9 @@ with st.spinner("Building 12 monthly Sentinel-1 composites in Earth Engine and c
     except Exception as e:
         st.error(f"Run failed: {e}")
         st.stop()
+if merge:
+    r = P.merge_classes(r)
+scheme = dict(classes=r["classes"], colors=r["colors"])
 
 lat, lon, start, size_px, smooth = params
 n_data = sum(r["maps"][m] is not None for m in r["months"])
@@ -169,12 +176,14 @@ tab_maps, tab_pct, tab_change, tab_ref, tab_input = st.tabs(
     ["🗺️ Monthly maps", "📊 Class percentages", "📈 Changes", "✅ Independent check", "📡 Sentinel-1 input"])
 
 with tab_maps:
-    title = "Land cover per month" + (" (3-month majority smoothing)" if r["smooth"] else "")
-    st.pyplot(plots.maps_grid(r["maps"], r["months"], title=title, scenes=r["scenes"], min_scenes=P.MIN_SCENES))
+    notes = [n for n, on in [("3-month majority smoothing", r["smooth"]), ("6 radar-separable classes", merge)] if on]
+    title = "Land cover per month" + (f" ({', '.join(notes)})" if notes else "")
+    st.pyplot(plots.maps_grid(r["maps"], r["months"], title=title, scenes=r["scenes"], min_scenes=P.MIN_SCENES,
+                              **scheme))
 
 with tab_pct:
     st.markdown("Share of the mapped area per class (pixels without radar data excluded).")
-    st.pyplot(plots.pct_chart(r["pct"]))
+    st.pyplot(plots.pct_chart(r["pct"], colors=r["colors"]))
     table = r["pct"].rename(index=mlabel)
     st.dataframe(table.style.format("{:.1f}"), width="stretch")
     st.download_button("Download percentages (CSV)", r["pct"].to_csv().encode(), "class_percentages.csv")
@@ -193,7 +202,7 @@ with tab_change:
                      width="stretch")
     with c2:
         st.markdown(f"**Total change ({r['total'].name})**")
-        st.pyplot(plots.total_change_chart(r["total"]))
+        st.pyplot(plots.total_change_chart(r["total"], colors=r["colors"]))
         ends = [m for m in (r["months"][0], r["months"][-1]) if m in low]
         if ends:
             st.caption("⚠ The total change starts or ends in a month with few scenes ("
@@ -213,8 +222,8 @@ with tab_ref:
         st.markdown(f"The **Esri 10 m Annual LULC** map ({r['ref_year']}) is produced independently from "
                     "Sentinel-2 with a different model and was **not used for training**. It is compared with "
                     "the most frequent class per pixel over the 12 months.")
-        st.pyplot(plots.reference_pair(P.annual_majority(r["maps"], r["months"]), r["ref_map"],
-                                       r["ref_year"], r["months"]))
+        st.pyplot(plots.reference_pair(P.annual_majority(r["maps"], r["months"], len(r["classes"])), r["ref_map"],
+                                       r["ref_year"], r["months"], **scheme))
         st.metric("Pixel agreement with Esri", f"{100 * r['ref_agreement']:.1f} %")
         st.dataframe(r["ref_table"].style.format("{:+.1f}", subset=["difference_pp"])
                      .format("{:.1f}", subset=["model_%", "reference_%"]), width="stretch")

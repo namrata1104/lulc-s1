@@ -56,6 +56,10 @@ streamlit run app/streamlit_app.py
 2. Choose the start month; the 12 months must end by the last complete month.
 3. Choose the area size (2.56, 5.12 or 10.24 km square) and press **Run**.
 
+Optional switches: **temporal smoothing** (3-month majority, to see how much of the change is noise) and
+**6 radar-separable classes** (crops + rangeland and bare + snow/ice merged, the pairs C-band radar cannot
+separate; same prediction, no new run).
+
 A run takes about 30–90 seconds. The app shows the 12 monthly maps, the class percentages per month, the
 month-to-month and total change in percentage points, a comparison with the Esri map, and the Sentinel-1
 input. Percentages and changes can be downloaded as CSV.

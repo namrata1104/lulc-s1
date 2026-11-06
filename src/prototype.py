@@ -137,17 +137,18 @@ def temporal_mode(maps, months, window=3):
 
 # --- Statistics ---------------------------------------------------------------------------
 
-def class_percentages(maps, months):
+def class_percentages(maps, months, classes=C.CLASSES):
     """% of the mapped area per class and month (pixels without data are excluded). Missing month -> NaN."""
+    n = len(classes)
     rows = {}
     for m in months:
         lab = maps[m]
         if lab is None:
-            rows[m] = [np.nan] * M.NUM_CLASSES
+            rows[m] = [np.nan] * n
             continue
-        counts = np.bincount(lab[lab != C.IGNORE].ravel(), minlength=M.NUM_CLASSES)[:M.NUM_CLASSES]
+        counts = np.bincount(lab[lab != C.IGNORE].ravel(), minlength=n)[:n]
         rows[m] = 100 * counts / max(counts.sum(), 1)
-    return pd.DataFrame(rows, index=C.CLASSES).T.rename_axis("month")
+    return pd.DataFrame(rows, index=classes).T.rename_axis("month")
 
 
 def changes(pct):
@@ -159,23 +160,40 @@ def changes(pct):
     return month_to_month, total
 
 
-def annual_majority(maps, months):
+def annual_majority(maps, months, n=M.NUM_CLASSES):
     """Most frequent class per pixel over the 12 months (for comparison with an annual reference map)."""
     stack = np.stack([maps[m] for m in months if maps[m] is not None])
-    votes = np.stack([(stack == c).sum(0) for c in range(M.NUM_CLASSES)], -1)
+    votes = np.stack([(stack == c).sum(0) for c in range(n)], -1)
     out = np.argmax(votes, -1).astype(np.uint8)
     out[votes.sum(-1) == 0] = C.IGNORE
     return out
 
 
-def compare_with_reference(pred, ref):
-    """Pixel agreement and class shares of a prediction vs. a reference map (both in project classes)."""
+def compare_with_reference(pred, ref, classes=C.CLASSES):
+    """Pixel agreement and class shares of a prediction vs. a reference map (both in the same class scheme)."""
+    n = len(classes)
     keep = (pred != C.IGNORE) & (ref != C.IGNORE)
-    share = lambda a: 100 * np.bincount(a.ravel(), minlength=M.NUM_CLASSES)[:M.NUM_CLASSES] / max(a.size, 1)
-    table = pd.DataFrame({"model_%": share(pred[keep]), "reference_%": share(ref[keep])}, index=C.CLASSES)
+    share = lambda a: 100 * np.bincount(a.ravel(), minlength=n)[:n] / max(a.size, 1)
+    table = pd.DataFrame({"model_%": share(pred[keep]), "reference_%": share(ref[keep])}, index=classes)
     table["difference_pp"] = table["model_%"] - table["reference_%"]
     agreement = float((pred[keep] == ref[keep]).mean()) if keep.any() else float("nan")
     return agreement, table
+
+
+def merge_classes(result):
+    """A run() result in the radar-separable 6-class scheme (crops + rangeland, bare + snow/ice merged): maps,
+    percentages, changes and the reference comparison are recomputed from the same predictions."""
+    lut = np.full(256, C.IGNORE, np.uint8)
+    lut[:len(C.TO_MERGED)] = C.TO_MERGED
+    out = dict(result, classes=C.MERGED_CLASSES, colors=C.MERGED_COLORS)
+    out["maps"] = {m: (lut[a] if a is not None else None) for m, a in result["maps"].items()}
+    out["pct"] = class_percentages(out["maps"], result["months"], C.MERGED_CLASSES)
+    out["month_to_month"], out["total"] = changes(out["pct"])
+    if "ref_map" in result:
+        out["ref_map"] = lut[result["ref_map"]]
+        majority = annual_majority(out["maps"], result["months"], len(C.MERGED_CLASSES))
+        out["ref_agreement"], out["ref_table"] = compare_with_reference(majority, out["ref_map"], C.MERGED_CLASSES)
+    return out
 
 
 # --- Full run -------------------------------------------------------------------------------
@@ -199,6 +217,7 @@ def run(lat, lon, start_month, size_px=512, model=None, stats=None, smooth=False
     pct = class_percentages(maps, months)
     month_to_month, total = changes(pct)
     result = dict(lat=lat, lon=lon, months=months, size_km=size_px * C.PIXEL_SIZE / 1000, smooth=smooth, n_times=n_times,
+                  classes=C.CLASSES, colors=C.CLASS_COLORS,
                   maps=maps, pct=pct, month_to_month=month_to_month, total=total, **data)
     if reference:
         year = int(np.median([int(m[:4]) for m in months]))
