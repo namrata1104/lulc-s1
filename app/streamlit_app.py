@@ -42,15 +42,11 @@ def analyse(lat, lon, start, size_px, smooth):
 
 @st.cache_data(show_spinner=False)
 def geocode(query):
-    """Place name -> (lat, lon, display name, place type) via OpenStreetMap Nominatim, or None."""
-    r = requests.get("https://nominatim.openstreetmap.org/search", params={"q": query, "format": "json", "limit": 1},
+    """Place name -> up to 5 matches (lat, lon, display name, place type) via OpenStreetMap Nominatim."""
+    r = requests.get("https://nominatim.openstreetmap.org/search", params={"q": query, "format": "json", "limit": 5},
                      headers={"User-Agent": "sar-land-cover-monitor (student project)"}, timeout=10)
     r.raise_for_status()
-    hits = r.json()
-    if not hits:
-        return None
-    h = hits[0]
-    return float(h["lat"]), float(h["lon"]), h["display_name"], h.get("addresstype", "")
+    return [(float(h["lat"]), float(h["lon"]), h["display_name"], h.get("addresstype", "")) for h in r.json()]
 
 
 def last_complete_month():
@@ -68,17 +64,24 @@ preset = st.sidebar.selectbox("…or choose a preset", list(PRESETS), disabled=b
 default, source = PRESETS[preset] or (48.137, 11.575), preset
 if query.strip():
     try:
-        hit = geocode(query.strip())
+        hits = geocode(query.strip())
     except requests.RequestException:
-        hit = False
+        hits = None
         st.sidebar.error("Place search is not reachable; enter latitude and longitude instead.")
+    hit = None
+    if hits and len(hits) > 1:
+        choice = st.sidebar.selectbox(f"{len(hits)} places match - choose one", range(len(hits)),
+                                      format_func=lambda i: hits[i][2][:90])
+        hit = hits[choice]
+    elif hits:
+        hit = hits[0]
     if hit:
-        default, source = hit[:2], query.strip()
+        default, source = hit[:2], f"{query.strip()}_{hit[0]:.4f}_{hit[1]:.4f}"
         st.sidebar.caption(f"📍 {hit[2]}")
         if hit[3] in ("country", "state", "region", "province", "continent"):
             st.sidebar.warning(f"This is the centre of a whole {hit[3]}. The map only covers up to 10 km around "
                                "this point; search for a city or a place instead.")
-    elif hit is None:
+    elif hits == []:
         st.sidebar.warning(f"No place found for “{query.strip()}”.")
 lat = st.sidebar.number_input("Latitude", -60.0, 75.0, default[0], step=0.001, format="%.4f", key=f"lat_{source}")
 lon = st.sidebar.number_input("Longitude", -180.0, 180.0, default[1], step=0.001, format="%.4f", key=f"lon_{source}")
