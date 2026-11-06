@@ -22,18 +22,20 @@ def class_legend(fig, ncol=N, y=0.0):
                bbox_to_anchor=(0.5, y), frameon=False, fontsize=10)
 
 
-def show_map(ax, label, title=None):
+def show_map(ax, label, title=None, title_color="black"):
     if label is None:
         ax.text(0.5, 0.5, "no Sentinel-1\nscene this month", ha="center", va="center", color="#6b7280")
         ax.set_facecolor("#f3f4f6")
     else:
         ax.imshow(np.ma.masked_equal(label, C.IGNORE), cmap=CMAP, vmin=0, vmax=N - 1, interpolation="nearest")
     if title:
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title, fontsize=11, color=title_color)
     ax.set_xticks([]); ax.set_yticks([])
 
 
-def maps_grid(maps, months, ncols=4, title=None):
+def maps_grid(maps, months, ncols=4, title=None, scenes=None, min_scenes=4):
+    """12 monthly maps. With `scenes` (month -> number of Sentinel-1 scenes), months composited from fewer than
+    `min_scenes` scenes get an orange "⚠ n scenes" title: they are noisier and less reliable."""
     rows = int(np.ceil(len(months) / ncols))
     height = 3.9 * rows + 1.3
     fig, axes = plt.subplots(rows, ncols, figsize=(3.6 * ncols, height),
@@ -42,7 +44,9 @@ def maps_grid(maps, months, ncols=4, title=None):
     for ax in axes.ravel()[len(months):]:
         ax.axis("off")
     for ax, m in zip(axes.ravel(), months):
-        show_map(ax, maps[m], month_label(m))
+        low = scenes is not None and 0 < scenes[m] < min_scenes
+        show_map(ax, maps[m], f"{month_label(m)}  ⚠ {scenes[m]} scenes" if low else month_label(m),
+                 title_color="#c2410c" if low else "black")
     if title:
         fig.suptitle(title, fontsize=13, y=1 - 0.2 / height)
     class_legend(fig, ncol=N // 2 if ncols < 4 else N, y=0.05 / height)

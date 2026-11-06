@@ -17,6 +17,7 @@ from tensorflow import keras
 from . import config as C, gee_data as G, model as M
 
 WEIGHTS_DIR = C.ROOT / "weights"
+MIN_SCENES = 4     # months composited from fewer Sentinel-1 scenes are flagged as less reliable (more speckle)
 
 # Esri 10 m Annual LULC (Impact Observatory), independent of Dynamic World; never used for training.
 ESRI_LULC = "projects/sat-io/open-datasets/landcover/ESRI_Global-LULC_10m_TS"

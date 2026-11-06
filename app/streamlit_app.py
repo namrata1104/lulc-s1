@@ -149,18 +149,29 @@ m4.metric("Sentinel-1 scenes used", sum(r["scenes"].values()))
 if n_data < 12:
     st.warning("Some months have no Sentinel-1 scene in this orbit pass; they are shown as empty and "
                "excluded from the change calculation.")
+low = [m for m in r["months"] if 0 < r["scenes"][m] < P.MIN_SCENES]
+if low:
+    st.warning(f"⚠ **{len(low)} month(s) built from fewer than {P.MIN_SCENES} Sentinel-1 scenes:** "
+               + ", ".join(f"{plots.month_label(m)} ({r['scenes'][m]})" for m in low)
+               + ". Composites from few scenes keep more speckle noise and are dominated by single acquisition "
+                 "days (rain, wind), so their maps and every change to or from them are less reliable. They are "
+                 "marked ⚠ below.")
+
+
+def mlabel(m):
+    return plots.month_label(m) + (" ⚠" if m in low else "")
 
 tab_maps, tab_pct, tab_change, tab_ref, tab_input = st.tabs(
     ["🗺️ Monthly maps", "📊 Class percentages", "📈 Changes", "✅ Independent check", "📡 Sentinel-1 input"])
 
 with tab_maps:
     title = "Land cover per month" + (" (3-month majority smoothing)" if r["smooth"] else "")
-    st.pyplot(plots.maps_grid(r["maps"], r["months"], title=title))
+    st.pyplot(plots.maps_grid(r["maps"], r["months"], title=title, scenes=r["scenes"], min_scenes=P.MIN_SCENES))
 
 with tab_pct:
     st.markdown("Share of the mapped area per class (pixels without radar data excluded).")
     st.pyplot(plots.pct_chart(r["pct"]))
-    table = r["pct"].rename(index=plots.month_label)
+    table = r["pct"].rename(index=mlabel)
     st.dataframe(table.style.format("{:.1f}"), width="stretch")
     st.download_button("Download percentages (CSV)", r["pct"].to_csv().encode(), "class_percentages.csv")
 
@@ -172,13 +183,17 @@ with tab_change:
         st.markdown("**Month-to-month change** (each row: share in the later month minus share in the earlier "
                     "month; the first month has no predecessor)")
         mtm = r["month_to_month"].iloc[1:]
-        mtm.index = [f"{plots.month_label(a)} → {plots.month_label(b)}" for a, b in zip(r["months"][:-1], r["months"][1:])]
+        mtm.index = [f"{mlabel(a)} → {mlabel(b)}" for a, b in zip(r["months"][:-1], r["months"][1:])]
         mtm.index.name = "change"
         st.dataframe(mtm.style.format("{:+.1f}").background_gradient(cmap="RdBu", vmin=-10, vmax=10),
                      width="stretch")
     with c2:
         st.markdown(f"**Total change ({r['total'].name})**")
         st.pyplot(plots.total_change_chart(r["total"]))
+        ends = [m for m in (r["months"][0], r["months"][-1]) if m in low]
+        if ends:
+            st.caption("⚠ The total change starts or ends in a month with few scenes ("
+                       + ", ".join(plots.month_label(m) for m in ends) + "), so it is less reliable.")
     st.info("Radar responds to soil moisture, crop growth and flooding, so part of the month-to-month "
             "change is seasonal or classification noise rather than real land-use change. Turn on "
             "temporal smoothing to see how much of it disappears.")
