@@ -1,21 +1,38 @@
-# Lab server setup. Only ~/vault survives a server restart, so the Python packages and the
+# Lab server setup. Only ~/vault survives a server restart, so the Python environment and the
 # Earth Engine login are kept there. Run after every server start, from the repo folder:
 #
 #     source scripts/server_setup.sh
 #
-# The first run creates the environment (a few minutes); later runs take seconds.
+# Works with both server images:
+#   * TensorFlow image (system Python has TensorFlow): a light venv on top of it (~/vault/venv-lulc)
+#   * other images with conda: a self-contained environment incl. TensorFlow + CUDA (~/vault/conda-lulc)
+# The first run creates the environment (a few minutes, ~10 min for the conda one); later runs take seconds.
 
 VAULT="$HOME/vault"
-VENV="$VAULT/venv-lulc"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+deactivate 2> /dev/null
 
-# Python environment on top of the server's TensorFlow (system site-packages)
-if [ ! -x "$VENV/bin/python" ]; then
-    echo "Creating $VENV ..."
-    python3 -m venv --system-site-packages "$VENV"
-    "$VENV/bin/pip" install -q -r <(grep -v tensorflow "$REPO/requirements.txt")
+if /usr/bin/python3 -c "import tensorflow" 2> /dev/null; then
+    ENV="$VAULT/venv-lulc"
+    if [ ! -x "$ENV/bin/python" ] || ! "$ENV/bin/python" -c "import tensorflow" 2> /dev/null; then
+        echo "Creating $ENV on top of the server's TensorFlow ..."
+        rm -rf "$ENV"
+        /usr/bin/python3 -m venv --system-site-packages "$ENV"
+        "$ENV/bin/pip" install -q -r <(grep -v tensorflow "$REPO/requirements.txt")
+    fi
+    source "$ENV/bin/activate"
+elif command -v conda > /dev/null; then
+    ENV="$VAULT/conda-lulc"
+    if [ ! -x "$ENV/bin/python" ]; then
+        echo "No TensorFlow on this server image: creating $ENV with TensorFlow + CUDA (about 10 minutes) ..."
+        conda create -y -q -p "$ENV" python=3.11 > /dev/null
+        "$ENV/bin/pip" install -q "tensorflow[and-cuda]==2.20.*" -r <(grep -v tensorflow "$REPO/requirements.txt")
+    fi
+    export PATH="$ENV/bin:$PATH"
+else
+    echo "ERROR: neither TensorFlow nor conda found on this server image."
+    return 1 2> /dev/null || exit 1
 fi
-source "$VENV/bin/activate"
 
 # Jupyter kernel "Python (lulc)" pointing to this environment
 python -m ipykernel install --user --name lulc --display-name "Python (lulc)" > /dev/null
@@ -28,9 +45,19 @@ if [ ! -L "$HOME/.config/earthengine" ]; then
     ln -s "$VAULT/.earthengine" "$HOME/.config/earthengine"
 fi
 
-if [ -f "$VAULT/.earthengine/credentials" ]; then
-    echo "Ready: environment active, kernel 'Python (lulc)' installed, Earth Engine login found."
-else
-    echo "Ready, but not logged in to Earth Engine yet. Run once:"
-    echo "    earthengine authenticate --auth_mode=notebook"
-fi
+# Check instead of assuming
+python - << 'EOF'
+import importlib.util, sys
+missing = [m for m in ["tensorflow", "ipykernel", "ee", "rasterio"] if importlib.util.find_spec(m) is None]
+if missing:
+    sys.exit(f"NOT READY - missing packages: {missing}")
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import tensorflow as tf
+gpus = tf.config.list_physical_devices("GPU")
+print(f"Python {sys.version.split()[0]} | TensorFlow {tf.__version__} | GPUs: {len(gpus)}")
+if not gpus:
+    print("WARNING: no GPU visible - training would be very slow. Start the server with a GPU image.")
+EOF
+[ -f "$VAULT/.earthengine/credentials" ] && echo "Earth Engine login found." \
+    || echo "Not logged in to Earth Engine yet. Run once: earthengine authenticate --auth_mode=notebook"
