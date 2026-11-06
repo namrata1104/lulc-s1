@@ -13,3 +13,4 @@ weights/experiments_smoke_test/
 experiments.log
 *.csv
 !weights/**/*.csv
+kaggle_upload.log
