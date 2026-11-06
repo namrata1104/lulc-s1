@@ -1,6 +1,6 @@
 {
   "n_times": 3,
-  "selected": "3 months",
+  "selected_for_prototype": "single month (validation difference within noise)",
   "training": {
     "params": 11872712,
     "epochs_run": 16,
@@ -128,5 +128,46 @@
       "vatnajokull_is": -0.0048
     }
   },
-  "selected_for_prototype": "single month (validation difference 0.005 is within noise; see Findings)"
+  "class_schemes": {
+    "single month (prototype), full test set | all test regions | 8 classes": {
+      "OA": 0.5104,
+      "mIoU": 0.3043,
+      "mF1": 0.4016
+    },
+    "single month (prototype), full test set | all test regions | 6 classes": {
+      "OA": 0.7148,
+      "mIoU": 0.4607,
+      "mF1": 0.585
+    },
+    "single month (prototype), full test set | without Atacama + Vatnaj\u00f6kull | 8 classes": {
+      "OA": 0.692,
+      "mIoU": 0.3555,
+      "mF1": 0.4537
+    },
+    "single month (prototype), full test set | without Atacama + Vatnaj\u00f6kull | 6 classes": {
+      "OA": 0.7715,
+      "mIoU": 0.4587,
+      "mF1": 0.5563
+    },
+    "3 months, patches with earlier months | all test regions | 8 classes": {
+      "OA": 0.4795,
+      "mIoU": 0.2763,
+      "mF1": 0.3614
+    },
+    "3 months, patches with earlier months | all test regions | 6 classes": {
+      "OA": 0.5278,
+      "mIoU": 0.3297,
+      "mF1": 0.4241
+    },
+    "3 months, patches with earlier months | without Atacama + Vatnaj\u00f6kull | 8 classes": {
+      "OA": 0.7185,
+      "mIoU": 0.3739,
+      "mF1": 0.457
+    },
+    "3 months, patches with earlier months | without Atacama + Vatnaj\u00f6kull | 6 classes": {
+      "OA": 0.7907,
+      "mIoU": 0.4687,
+      "mF1": 0.5545
+    }
+  }
 }
