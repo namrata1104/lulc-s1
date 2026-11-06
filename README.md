@@ -19,6 +19,8 @@ continents, plus a prototype that maps any location over 12 months and reports c
 | [`04_case_study`](notebooks/04_case_study.ipynb) | Prototype pipeline for Munich 2025, comparison with Esri, seasonal effects, error inflation of changes |
 | [`05_multitemporal`](notebooks/05_multitemporal.ipynb) | 3-month input model; evaluation with 6 radar-separable classes |
 
+**Dataset:** https://www.kaggle.com/datasets/namratabhoyar/sentinel1-lulc-global (unzip into `data/` to reuse it without a new Earth Engine export).
+
 **Data and preprocessing.** Train / validation on 2023–24, test on 9 unseen regions in 2025–26. Sentinel-1 scenes
 (calibrated, terrain-corrected, dB by Earth Engine) use one orbit pass per area, border-noise masking, a Lee speckle
 filter and a monthly median. Labels are the monthly mean Dynamic World probabilities (argmax) on the same 10 m grid;
@@ -103,7 +105,7 @@ are needed; the place search uses the public OpenStreetMap service.
 
 | Requirement | Where |
 |---|---|
-| Dataset | download link: *to be added* |
+| Dataset | **https://www.kaggle.com/datasets/namratabhoyar/sentinel1-lulc-global** (≈ 25 GB: `raw_global.zip` Earth Engine tiles, `patches_global.zip` training patches, `export_log.csv`) |
 | Notebooks with results and training curves | `notebooks/01`–`05` |
 | Prototype source, README, requirements | `app/`, `src/`, this file, `requirements.txt` |
 | Trained model weights | `weights/best_model.keras` (+ all compared models in `weights/`) |
