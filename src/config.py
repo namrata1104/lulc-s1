@@ -6,7 +6,7 @@ GEE_PROJECT = "lulc-sentinel-1"
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
-RAW_DIR = DATA_DIR / "raw_global"          # GeoTIFF tiles downloaded from GEE
+RAW_DIR = Path(os.environ.get("LULC_RAW_DIR", DATA_DIR / "raw_global"))   # GeoTIFF tiles downloaded from GEE
 PATCH_DIR = Path(os.environ.get("LULC_PATCH_DIR", DATA_DIR / "patches_global"))   # 256x256 numpy patches per split
 
 # --- Sentinel-1 -------------------------------------------------------------

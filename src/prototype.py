@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from tensorflow import keras
 
-from . import config as C, gee_data as G, model as M
+from . import config as C, gee_data as G, model as M, temporal as TM
 
 WEIGHTS_DIR = C.ROOT / "weights"
 MIN_SCENES = 4     # months composited from fewer Sentinel-1 scenes are flagged as less reliable (more speckle)
@@ -99,7 +99,7 @@ def predict_map(model, s1, stats, patch=C.PATCH_PX, stride=C.PATCH_PX // 2, batc
     """Sliding-window prediction with 50 % overlap; class probabilities of overlapping windows are averaged.
     Pixels without Sentinel-1 data get IGNORE."""
     h, w, _ = s1.shape
-    valid = ~np.isnan(s1).any(-1)
+    valid = ~np.isnan(s1[..., -len(C.S1_BANDS):]).any(-1)          # the target month (last in a stack)
     x = M.normalise(np.nan_to_num(s1, nan=0.0), stats)
     x[~valid] = 0.0                                          # = training mean after z-scoring
 
@@ -184,13 +184,21 @@ def run(lat, lon, start_month, size_px=512, model=None, stats=None, smooth=False
     months = month_list(start_month)
     model = model or load_model()
     stats = stats or load_stats()
-    data = fetch_s1(lat, lon, months, size_px, workers=workers)
-    maps = {m: (predict_map(model, a, stats) if a is not None else None) for m, a in data["s1"].items()}
+    # a multi-temporal model (3 * n input channels) also needs the months before the first map month
+    n_times = model.input_shape[-1] // len(C.S1_BANDS)
+    extra = TM.STEP * (n_times - 1)
+    fetch = month_list(TM.shift_month(start_month, -extra), 12 + extra) if extra else months
+    data = fetch_s1(lat, lon, fetch, size_px, workers=workers)
+    s1 = data["s1"]
+    maps = {m: (predict_map(model, TM.stack_months(s1, m, n_times) if n_times > 1 else s1[m], stats)
+                if s1[m] is not None else None) for m in months}
+    data["s1"] = {m: s1[m] for m in months}
+    data["scenes"] = {m: data["scenes"][m] for m in months}
     if smooth:
         maps = temporal_mode(maps, months)
     pct = class_percentages(maps, months)
     month_to_month, total = changes(pct)
-    result = dict(lat=lat, lon=lon, months=months, size_km=size_px * C.PIXEL_SIZE / 1000, smooth=smooth,
+    result = dict(lat=lat, lon=lon, months=months, size_km=size_px * C.PIXEL_SIZE / 1000, smooth=smooth, n_times=n_times,
                   maps=maps, pct=pct, month_to_month=month_to_month, total=total, **data)
     if reference:
         year = int(np.median([int(m[:4]) for m in months]))

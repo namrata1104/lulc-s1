@@ -33,10 +33,12 @@ def load_split(split, in_memory=True, smoke=False):
 
 
 def augment_intensity(x, t):
-    # brightness change (same dB offset on VV and VH) and speckle-like noise, before normalisation
+    # brightness change (same dB offset on VV and VH, drawn separately for every stacked month: calibration
+    # differs between acquisitions) and speckle-like noise, before normalisation
     x = tf.cast(x, tf.float32)
-    offset = tf.random.uniform([], -BRIGHTNESS_DB, BRIGHTNESS_DB)
-    x = x + tf.stack([offset, offset, 0.0])
+    n = x.shape[-1] // 3
+    offset = tf.random.uniform([n], -BRIGHTNESS_DB, BRIGHTNESS_DB)
+    x = x + tf.reshape(tf.stack([offset, offset, tf.zeros_like(offset)], -1), [-1])
     x = x + tf.random.normal(tf.shape(x), stddev=NOISE_DB)
     return x, t
 
@@ -58,7 +60,7 @@ def make_ds(X, y, stats, batch, training=False, index=None):
             yield X[i], y[i][..., None]
 
     ds = tf.data.Dataset.from_generator(gen, output_signature=(
-        tf.TensorSpec((C.PATCH_PX, C.PATCH_PX, 3), tf.float16),
+        tf.TensorSpec((C.PATCH_PX, C.PATCH_PX, X.shape[-1]), tf.float16),
         tf.TensorSpec((C.PATCH_PX, C.PATCH_PX, 1), tf.uint8)))
     ds = ds.apply(tf.data.experimental.assert_cardinality(len(index)))
     if training:

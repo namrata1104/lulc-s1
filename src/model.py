@@ -6,6 +6,7 @@ Three models of increasing capacity, compared in notebook 02:
   deeplabv3plus  - ImageNet-pretrained ResNet50 + atrous spatial pyramid pooling (multi-scale context)
 """
 import json
+import warnings
 
 import numpy as np
 import tensorflow as tf
@@ -25,10 +26,14 @@ def load_stats(path=C.PATCH_DIR / "stats.json"):
 
 
 def normalise(x, stats):
-    """x: (..., 3) dB values -> clipped, z-scored float32. Works on numpy arrays and tensors."""
+    """x: (..., 3 * n) dB values (n stacked months of VV, VH, VV-VH) -> clipped, z-scored float32.
+    Works on numpy arrays and tensors."""
     lo, hi = np.array(stats["clip"], dtype=np.float32).T
     mean = np.array(stats["mean"], dtype=np.float32)
     std = np.array(stats["std"], dtype=np.float32)
+    n = x.shape[-1] // len(mean)
+    if n > 1:
+        lo, hi, mean, std = (np.tile(a, n) for a in (lo, hi, mean, std))
     if isinstance(x, np.ndarray):
         return (np.clip(x.astype(np.float32), lo, hi) - mean) / std
     return (tf.clip_by_value(tf.cast(x, tf.float32), lo, hi) - mean) / std
@@ -98,11 +103,31 @@ def aspp(x, filters=256, rates=(6, 12, 18)):
     return conv_bn_relu(x, filters, kernel=1, name="aspp_out")
 
 
-def deeplabv3plus(dropout=0.3):
+def resnet50_encoder(n_times=1):
+    """ImageNet-pretrained ResNet50. For n_times > 1 months stacked as 3 * n_times input channels, the pretrained
+    first-layer filters are copied to every month and divided by n_times, so the network starts from the same
+    response as for a single month and learns from there how the months differ."""
+    rgb = keras.applications.ResNet50(include_top=False, weights="imagenet", input_shape=INPUT_SHAPE)
+    if n_times == 1:
+        return rgb
+    with warnings.catch_warnings():   # Keras warns about >3 input channels; intended here
+        warnings.simplefilter("ignore", UserWarning)
+        encoder = keras.applications.ResNet50(include_top=False, weights=None,
+                                              input_shape=(C.PATCH_PX, C.PATCH_PX, 3 * n_times))
+    for new, old in zip(encoder.layers, rgb.layers):
+        weights = old.get_weights()
+        if new.name == "conv1_conv":
+            weights[0] = np.tile(weights[0], (1, 1, n_times, 1)) / n_times
+        if weights:
+            new.set_weights(weights)
+    return encoder
+
+
+def deeplabv3plus(dropout=0.3, n_times=1):
     """DeepLabV3+ (Chen et al. 2018) on an ImageNet-pretrained ResNet50. The three SAR channels are fed
     in place of RGB: the pretrained filters (edges, textures) are a better starting point than random
-    weights and are fine-tuned to SAR."""
-    encoder = keras.applications.ResNet50(include_top=False, weights="imagenet", input_shape=INPUT_SHAPE)
+    weights and are fine-tuned to SAR. With n_times > 1, that many months are stacked as input."""
+    encoder = resnet50_encoder(n_times)
     high = encoder.get_layer("conv4_block6_2_relu").output     # 1/16 resolution, deep features
     low = encoder.get_layer("conv2_block3_2_relu").output      # 1/4 resolution, fine detail
 
@@ -114,7 +139,8 @@ def deeplabv3plus(dropout=0.3):
     x = conv_bn_relu(x, 256, name="dec_a")
     x = conv_bn_relu(x, 256, name="dec_b")
     x = layers.UpSampling2D(4, interpolation="bilinear", name="dec_up_final")(x)
-    return keras.Model(encoder.input, segmentation_head(x), name="deeplabv3plus")
+    return keras.Model(encoder.input, segmentation_head(x),
+                       name="deeplabv3plus" if n_times == 1 else f"deeplabv3plus_mt{n_times}")
 
 
 # --- 4. DeepLabV3+ / AE-DeepLabV3+ with exchangeable backbones (experiments, notebook 03) ---------------
@@ -189,7 +215,8 @@ def deeplab(backbone, atrous=False, dropout=0.3):
     return keras.Model(encoder.input, segmentation_head(x), name=name)
 
 
-MODELS = {"baseline_cnn": baseline_cnn, "unet": unet, "deeplabv3plus": deeplabv3plus}
+MODELS = {"baseline_cnn": baseline_cnn, "unet": unet, "deeplabv3plus": deeplabv3plus,
+          "deeplabv3plus_mt3": lambda: deeplabv3plus(n_times=3)}
 for _b in BACKBONES:
     MODELS[f"deeplabv3plus_{_b}"] = lambda b=_b: deeplab(b, atrous=False)
     MODELS[f"ae_deeplabv3plus_{_b}"] = lambda b=_b: deeplab(b, atrous=True)

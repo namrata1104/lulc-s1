@@ -13,7 +13,7 @@ import pandas as pd  # noqa: E402
 import requests  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from src import config as C, gee_data as G, plots, prototype as P  # noqa: E402
+from src import config as C, gee_data as G, plots, prototype as P, temporal as TM  # noqa: E402
 
 st.set_page_config(page_title="SAR Land Cover Monitor", page_icon="🛰️", layout="wide")
 
@@ -146,6 +146,10 @@ m1.metric("Area (square)", f"{r['size_km']:.2f} km")
 m2.metric("Months with data", f"{n_data} / 12")
 m3.metric("Orbit pass", r["orbit"].title())
 m4.metric("Sentinel-1 scenes used", sum(r["scenes"].values()))
+if r.get("n_times", 1) > 1:
+    st.caption(f"Model input: {r['n_times']} months per map (the month itself and the months "
+               f"{', '.join(str(TM.STEP * k) for k in range(r['n_times'] - 1, 0, -1))} months earlier), so that "
+               "seasonal patterns help to separate the classes.")
 if n_data < 12:
     st.warning("Some months have no Sentinel-1 scene in this orbit pass; they are shown as empty and "
                "excluded from the change calculation.")
