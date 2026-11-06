@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd  # noqa: E402
+import requests  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from src import config as C, gee_data as G, plots, prototype as P  # noqa: E402
@@ -39,6 +40,19 @@ def analyse(lat, lon, start, size_px, smooth):
     return P.run(lat, lon, start, size_px=size_px, model=model, stats=stats, smooth=smooth)
 
 
+@st.cache_data(show_spinner=False)
+def geocode(query):
+    """Place name -> (lat, lon, display name, place type) via OpenStreetMap Nominatim, or None."""
+    r = requests.get("https://nominatim.openstreetmap.org/search", params={"q": query, "format": "json", "limit": 1},
+                     headers={"User-Agent": "sar-land-cover-monitor (student project)"}, timeout=10)
+    r.raise_for_status()
+    hits = r.json()
+    if not hits:
+        return None
+    h = hits[0]
+    return float(h["lat"]), float(h["lon"]), h["display_name"], h.get("addresstype", "")
+
+
 def last_complete_month():
     first_of_month = dt.date.today().replace(day=1)
     previous = first_of_month - dt.timedelta(days=1)
@@ -48,10 +62,26 @@ def last_complete_month():
 # --- Sidebar: inputs ------------------------------------------------------------------------
 
 st.sidebar.header("Location and period")
-preset = st.sidebar.selectbox("Location", list(PRESETS))
-default = PRESETS[preset] or (48.137, 11.575)
-lat = st.sidebar.number_input("Latitude", -60.0, 75.0, default[0], step=0.001, format="%.4f", key=f"lat_{preset}")
-lon = st.sidebar.number_input("Longitude", -180.0, 180.0, default[1], step=0.001, format="%.4f", key=f"lon_{preset}")
+query = st.sidebar.text_input("Search a place", placeholder="e.g. Kampala, Uganda",
+                              help="Any city, landmark or address (OpenStreetMap). Leave empty to use the list below.")
+preset = st.sidebar.selectbox("…or choose a preset", list(PRESETS), disabled=bool(query.strip()))
+default, source = PRESETS[preset] or (48.137, 11.575), preset
+if query.strip():
+    try:
+        hit = geocode(query.strip())
+    except requests.RequestException:
+        hit = False
+        st.sidebar.error("Place search is not reachable; enter latitude and longitude instead.")
+    if hit:
+        default, source = hit[:2], query.strip()
+        st.sidebar.caption(f"📍 {hit[2]}")
+        if hit[3] in ("country", "state", "region", "province", "continent"):
+            st.sidebar.warning(f"This is the centre of a whole {hit[3]}. The map only covers up to 10 km around "
+                               "this point; search for a city or a place instead.")
+    elif hit is None:
+        st.sidebar.warning(f"No place found for “{query.strip()}”.")
+lat = st.sidebar.number_input("Latitude", -60.0, 75.0, default[0], step=0.001, format="%.4f", key=f"lat_{source}")
+lon = st.sidebar.number_input("Longitude", -180.0, 180.0, default[1], step=0.001, format="%.4f", key=f"lon_{source}")
 
 end_year, end_month = last_complete_month()
 years = list(range(2017, end_year + 1))
