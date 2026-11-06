@@ -11,3 +11,5 @@ training.log
 weights/experiments/*.keras
 weights/experiments_smoke_test/
 experiments.log
+*.csv
+!weights/**/*.csv
