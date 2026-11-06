@@ -4,8 +4,10 @@
 #     source scripts/server_setup.sh
 #
 # Works with both server images:
-#   * TensorFlow image (system Python has TensorFlow): a light venv on top of it (~/vault/venv-lulc)
-#   * other images with conda: a self-contained environment incl. TensorFlow + CUDA (~/vault/conda-lulc)
+#   * TensorFlow image (system Python has TensorFlow): a light venv on top of it (~/vault/.envs/venv-lulc)
+#   * other images with conda: a self-contained environment incl. TensorFlow + CUDA (~/vault/.envs/conda-lulc)
+# The environments live in a hidden folder in the vault, not in "Deep Learning project": paths with spaces
+# break Python environments.
 # The first run creates the environment (a few minutes, ~10 min for the conda one); later runs take seconds.
 
 VAULT="$HOME/vault"
@@ -13,20 +15,21 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 deactivate 2> /dev/null
 
 if /usr/bin/python3 -c "import tensorflow" 2> /dev/null; then
-    ENV="$VAULT/venv-lulc"
+    ENV="$VAULT/.envs/venv-lulc"
     if [ ! -x "$ENV/bin/python" ] || ! "$ENV/bin/python" -c "import tensorflow" 2> /dev/null; then
         echo "Creating $ENV on top of the server's TensorFlow ..."
         rm -rf "$ENV"
+        mkdir -p "$VAULT/.envs"
         /usr/bin/python3 -m venv --system-site-packages "$ENV"
-        "$ENV/bin/pip" install -q -r <(grep -v tensorflow "$REPO/requirements.txt")
+        "$ENV/bin/python" -m pip install -q -r <(grep -v tensorflow "$REPO/requirements.txt")
     fi
     source "$ENV/bin/activate"
 elif command -v conda > /dev/null; then
-    ENV="$VAULT/conda-lulc"
+    ENV="$VAULT/.envs/conda-lulc"
     if [ ! -x "$ENV/bin/python" ]; then
         echo "No TensorFlow on this server image: creating $ENV with TensorFlow + CUDA (about 10 minutes) ..."
         conda create -y -q -p "$ENV" python=3.11 > /dev/null
-        "$ENV/bin/pip" install -q "tensorflow[and-cuda]==2.20.*" -r <(grep -v tensorflow "$REPO/requirements.txt")
+        "$ENV/bin/python" -m pip install -q "tensorflow[and-cuda]==2.20.*" -r <(grep -v tensorflow "$REPO/requirements.txt")
     fi
     export PATH="$ENV/bin:$PATH"
 else
