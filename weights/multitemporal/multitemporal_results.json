@@ -1,0 +1,131 @@
+{
+  "n_times": 3,
+  "selected": "3 months",
+  "training": {
+    "params": 11872712,
+    "epochs_run": 16,
+    "minutes": 33.2,
+    "batch": 16,
+    "best_epoch": 8,
+    "train_mIoU": 0.7091,
+    "val_mIoU": 0.3484,
+    "gap": 0.3606,
+    "verdict": "overfitting: clearly better on training than on validation regions"
+  },
+  "comparison": {
+    "val OA": {
+      "single month": 0.6153,
+      "3 months": 0.6369,
+      "difference": 0.0217
+    },
+    "val mIoU": {
+      "single month": 0.3436,
+      "3 months": 0.3484,
+      "difference": 0.0048
+    },
+    "val mF1": {
+      "single month": 0.4607,
+      "3 months": 0.4721,
+      "difference": 0.0114
+    },
+    "test OA": {
+      "single month": 0.4873,
+      "3 months": 0.4795,
+      "difference": -0.0079
+    },
+    "test mIoU": {
+      "single month": 0.3132,
+      "3 months": 0.2763,
+      "difference": -0.0369
+    },
+    "test mF1": {
+      "single month": 0.4081,
+      "3 months": 0.3614,
+      "difference": -0.0467
+    }
+  },
+  "per_class_IoU": {
+    "single month": {
+      "water": 0.3133,
+      "trees": 0.5173,
+      "flooded_vegetation": 0.0014,
+      "crops": 0.5522,
+      "rangeland": 0.2948,
+      "built": 0.8041,
+      "bare": 0.0205,
+      "snow_ice": 0.0023
+    },
+    "3 months": {
+      "water": 0.2589,
+      "trees": 0.322,
+      "flooded_vegetation": 0.0001,
+      "crops": 0.6463,
+      "rangeland": 0.1802,
+      "built": 0.7946,
+      "bare": 0.0084,
+      "snow_ice": 0.0
+    }
+  },
+  "regions": {
+    "OA single": {
+      "atacama_cl": 0.0257,
+      "canterbury_nz": 0.5242,
+      "dhaka_bd": 0.8058,
+      "dubai_ae": 0.6782,
+      "kansas_us": 0.6779,
+      "mexico_city_mx": 0.8535,
+      "pantanal_br": 0.7622,
+      "vatnajokull_is": 0.0048
+    },
+    "OA 3 months": {
+      "atacama_cl": 0.0068,
+      "canterbury_nz": 0.5694,
+      "dhaka_bd": 0.793,
+      "dubai_ae": 0.6776,
+      "kansas_us": 0.757,
+      "mexico_city_mx": 0.834,
+      "pantanal_br": 0.6765,
+      "vatnajokull_is": 0.0
+    },
+    "mIoU single": {
+      "atacama_cl": 0.0043,
+      "canterbury_nz": 0.1577,
+      "dhaka_bd": 0.2594,
+      "dubai_ae": 0.2055,
+      "kansas_us": 0.3079,
+      "mexico_city_mx": 0.1848,
+      "pantanal_br": 0.1605,
+      "vatnajokull_is": 0.0048
+    },
+    "mIoU 3 months": {
+      "atacama_cl": 0.0099,
+      "canterbury_nz": 0.1933,
+      "dhaka_bd": 0.255,
+      "dubai_ae": 0.1942,
+      "kansas_us": 0.3362,
+      "mexico_city_mx": 0.1776,
+      "pantanal_br": 0.1259,
+      "vatnajokull_is": 0.0
+    },
+    "patches": {
+      "atacama_cl": 513,
+      "canterbury_nz": 192,
+      "dhaka_bd": 109,
+      "dubai_ae": 317,
+      "kansas_us": 442,
+      "mexico_city_mx": 337,
+      "pantanal_br": 513,
+      "vatnajokull_is": 391
+    },
+    "\u0394 OA": {
+      "atacama_cl": -0.0189,
+      "canterbury_nz": 0.0452,
+      "dhaka_bd": -0.0127,
+      "dubai_ae": -0.0006,
+      "kansas_us": 0.0791,
+      "mexico_city_mx": -0.0195,
+      "pantanal_br": -0.0856,
+      "vatnajokull_is": -0.0048
+    }
+  }
+}
