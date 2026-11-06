@@ -1,39 +1,78 @@
 # SAR Land Cover Monitor
 
-Global land use / land cover (LULC) semantic segmentation from **Sentinel-1 radar only**, plus a prototype
-that maps any location over 12 months and reports class percentages and changes.
+Land use / land cover (LULC) semantic segmentation from **Sentinel-1 radar only**, trained on 40 study areas on six
+continents, plus a prototype that maps any location over 12 months and reports class percentages and changes.
 
-* **Input:** Sentinel-1 VV and VH backscatter (and their ratio), monthly composites
-* **Output:** 8 classes: water, trees, flooded vegetation, crops, rangeland, built, bare, snow/ice
-* **Labels:** Google Dynamic World (training); Esri 10 m Annual LULC as an independent check
+* **Input:** Sentinel-1 IW GRD, VV + VH (+ VV−VH ratio), monthly composites at 10 m
+* **Labels:** Google Dynamic World (Sentinel-2 based), 8 classes: water, trees, flooded vegetation, crops, rangeland,
+  built, bare, snow/ice
+* **Independent check:** Esri 10 m Annual LULC (never used for training)
 * **Framework:** TensorFlow / Keras
 
-## Repository
+## What was done
 
-| Path | Contents |
+| Notebook | Content |
 |---|---|
-| `notebooks/01_data_export.ipynb` | Dataset: 40 study areas on six continents, Earth Engine export, preprocessing, patching |
-| `notebooks/02_training.ipynb` | Baseline CNN, U-Net and DeepLabV3+: training curves, test metrics, model selection |
-| `app/streamlit_app.py` | Prototype (web app) |
-| `src/config.py` | Study areas, classes, periods, grid and preprocessing settings |
-| `src/gee_data.py` | Sentinel-1 monthly composites and Dynamic World labels from Earth Engine |
-| `src/patching.py` | Tiles → 256 × 256 patches, class distribution, normalisation statistics |
-| `src/model.py` | Model architectures, loss, normalisation |
-| `src/evaluation.py` | Overall accuracy, mIoU, per-class IoU / F1 |
-| `src/prototype.py` | Prototype pipeline: retrieval, inference, percentages, changes, reference comparison |
-| `src/plots.py` | Figures for the prototype |
-| `weights/` | Trained models (`best_model.keras` is used by the prototype), `stats.json`, training logs |
-| `scripts/` | Background export, tile check, orbit selection, lab-server setup |
+| [`01_data_export`](notebooks/01_data_export.ipynb) | Study areas (27 train, 26 with data · 4 val · 9 test; split by region), Earth Engine export, preprocessing, patching, class distribution |
+| [`02_training`](notebooks/02_training.ipynb) | Baseline CNN, U-Net, DeepLabV3+ (ResNet50): training curves, test metrics, model selection |
+| [`03_experiments`](notebooks/03_experiments.ipynb) | Six DeepLabV3+ / AE-DeepLabV3+ variants with ResNet101, ResNet152 and Xception encoders |
+| [`04_case_study`](notebooks/04_case_study.ipynb) | Prototype pipeline for Munich 2025, comparison with Esri, seasonal effects, error inflation of changes |
+| [`05_multitemporal`](notebooks/05_multitemporal.ipynb) | 3-month input model; evaluation with 6 radar-separable classes |
 
-## Required account
+**Data and preprocessing.** Train / validation on 2023–24, test on 9 unseen regions in 2025–26. Sentinel-1 scenes
+(calibrated, terrain-corrected, dB by Earth Engine) use one orbit pass per area, border-noise masking, a Lee speckle
+filter and a monthly median. Labels are the monthly mean Dynamic World probabilities (argmax) on the same 10 m grid;
+uncertain pixels (probability < 0.3) are ignored. 256 × 256 patches, z-score normalisation with training statistics,
+flips / rotations / brightness / speckle-noise augmentation. 14,952 training, 1,808 validation and 4,536 test patches.
 
-**Google Earth Engine** with a Google Cloud project registered for noncommercial use (free):
+**Models.** Ten models were trained with the same procedure (weighted cross-entropy + Dice, AdamW, learning-rate
+halving and early stopping on validation mIoU):
 
-1. Sign up at <https://earthengine.google.com> and create a Cloud project.
-2. Register the project for noncommercial use (Community tier is sufficient for the prototype).
-3. Put your project ID in `src/config.py` (`GEE_PROJECT`).
+| Models | Test OA | Test mIoU |
+|---|---|---|
+| Baseline CNN | 0.42 | 0.20 |
+| U-Net | 0.50 | 0.27 |
+| **DeepLabV3+ · ResNet50** (used in the prototype) | **0.51** | **0.30** |
+| 6 DeepLabV3+ / AE-DeepLabV3+ variants (ResNet101, ResNet152, Xception) | 0.43–0.52 | 0.24–0.30 |
+| DeepLabV3+ · ResNet50 with 3 months as input | 0.48 | 0.28 |
 
-No other API keys are needed.
+## Findings (short)
+
+1. **Context and pretraining help** (baseline → U-Net → DeepLabV3+), **larger encoders and temporal input do not**:
+   all deep models end at about 0.30 test mIoU on unseen regions, while on the training regions in 2025–26 the same
+   models reach 0.56–0.58 mIoU and 0.76–0.78 OA. The limit is the diversity of the training landscapes, not the network.
+2. **Most errors fall into two class pairs that C-band radar cannot separate physically:** bare ↔ snow/ice (dry snow
+   is nearly transparent to radar) and crops ↔ rangeland. Two test regions (Atacama salt flats, Vatnajökull glacier)
+   fail almost completely.
+3. **From 8 to 6 classes:** merging these pairs into *low vegetation* and *bare / snow* raises the test OA of the same
+   predictions from **0.51 to 0.72** (mIoU 0.30 → 0.46), and to **0.77** without the two extreme regions. The prototype
+   offers both views.
+4. **Case study Munich 2025:** 88 % pixel agreement with the Esri map. Part of the monthly change is seasonal (trees
+   10.6 % in January vs. 17.1 % in July, leaf-on/off), so the January → December total change is inflated; most
+   classification errors are systematic and partly cancel in the changes. The Oktoberfest on the Theresienwiese is
+   detected as a real temporary change.
+5. **Few radar scenes per month make maps noisier**; the prototype flags months with fewer than 4 scenes.
+
+Details, numbers and the critical discussion are in the notebooks and the project report.
+
+## Prototype
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+1. Search a place by name (any city, country or landmark, OpenStreetMap) or enter latitude / longitude.
+2. Choose the start month; the 12 months must end by the last complete month.
+3. Choose the area (2.56, 5.12 or 10.24 km square) and press **Run** (about 30–90 s).
+
+The app shows the 12 monthly maps, class percentages per month, month-to-month and total change in percentage points,
+the comparison with the Esri map and the Sentinel-1 input; results can be downloaded as CSV. Optional switches:
+**temporal smoothing** (3-month majority) and **6 radar-separable classes** (same prediction, no new run).
+
+**How it works.** For each month, Earth Engine builds a Sentinel-1 composite exactly as for training (one orbit pass
+for all 12 months). The composite is normalised with `weights/stats.json` and classified by `weights/best_model.keras`
+in overlapping 256 × 256 windows. Class percentage = class pixels / pixels with radar data × 100; month-to-month change =
+share(month) − share(previous month); total change = share(last month) − share(first month), in percentage points.
 
 ## Setup
 
@@ -43,42 +82,29 @@ Python 3.11.
 conda create -n lulc python=3.11 -y
 conda activate lulc
 pip install -r requirements.txt
-earthengine authenticate          # on a machine without a browser: --auth_mode=notebook
+earthengine authenticate          # without a browser: --auth_mode=notebook
 ```
 
-## Running the prototype
+**Required account: Google Earth Engine** with a Google Cloud project registered for noncommercial use (free,
+Community tier is enough for the prototype). Put the project ID in `src/config.py` (`GEE_PROJECT`). No other keys
+are needed; the place search uses the public OpenStreetMap service.
 
-```bash
-streamlit run app/streamlit_app.py
-```
+## Repository
 
-1. Choose a preset city or enter latitude / longitude.
-2. Choose the start month; the 12 months must end by the last complete month.
-3. Choose the area size (2.56, 5.12 or 10.24 km square) and press **Run**.
+| Path | Contents |
+|---|---|
+| `notebooks/` | The five notebooks above, with outputs |
+| `app/streamlit_app.py` | Prototype |
+| `src/` | `config` (areas, classes, settings), `gee_data` (Earth Engine), `patching`, `temporal`, `model`, `training`, `evaluation`, `prototype`, `plots` |
+| `weights/` | `best_model.keras` (prototype model), all notebook-02 models, `stats.json`, training logs and figures; `experiments/` and `multitemporal/` logs and results |
+| `scripts/` | Background export, tile check, orbit selection, lab-server setup |
 
-Optional switches: **temporal smoothing** (3-month majority, to see how much of the change is noise) and
-**6 radar-separable classes** (crops + rangeland and bare + snow/ice merged, the pairs C-band radar cannot
-separate; same prediction, no new run).
+## Submission
 
-A run takes about 30–90 seconds. The app shows the 12 monthly maps, the class percentages per month, the
-month-to-month and total change in percentage points, a comparison with the Esri map, and the Sentinel-1
-input. Percentages and changes can be downloaded as CSV.
-
-### How it works
-
-1. **Retrieval:** for each of the 12 months, Earth Engine builds a Sentinel-1 composite exactly as for training:
-   IW GRD scenes (calibrated, terrain-corrected, dB), border-noise mask, Lee speckle filter, per-pixel median.
-   One orbit pass is used for all 12 months (the one with more scenes), so that viewing geometry does not
-   change between months.
-2. **Inference:** the composite is normalised with the training statistics (`weights/stats.json`) and classified
-   with `weights/best_model.keras` in overlapping 256 × 256 windows (50 % overlap, probabilities averaged).
-3. **Calculation:** class percentage = class pixels / pixels with radar data × 100 for each month;
-   month-to-month change = share(month) − share(previous month); total change = share(last month) −
-   share(first month); all changes in percentage points.
-4. **Check:** the majority class per pixel over the 12 months is compared with the Esri annual map.
-
-## Reproducing the dataset and training
-
-Run `notebooks/01_data_export.ipynb`, then `notebooks/02_training.ipynb` (GPU recommended). The full export is
-about 15 GB and needs more than one month of the Community-tier Earth Engine quota.
-The dataset download link is given in the report.
+| Requirement | Where |
+|---|---|
+| Dataset | download link: *to be added* |
+| Notebooks with results and training curves | `notebooks/01`–`05` |
+| Prototype source, README, requirements | `app/`, `src/`, this file, `requirements.txt` |
+| Trained model weights | `weights/best_model.keras` (+ all compared models in `weights/`) |
+| Screen recording | *to be added* |
