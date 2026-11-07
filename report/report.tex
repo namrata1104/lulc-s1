@@ -277,7 +277,16 @@ DeepLabV3+ (multi-temporal) & 3 months & 11.9\,M & ResNet50, first layer for 9 c
 
 \subsection{Training}
 
-All models minimise class-weighted cross-entropy plus soft Dice over labelled pixels $p$,
+\textit{Normalisation and augmentation.} Each channel is clipped to a fixed dB range and z-scored with the mean and
+standard deviation of the training split only (Table~\ref{tab:prep}), and the same statistics are used at inference.
+During training, patches are randomly flipped and rotated by multiples of $90^\circ$, because land cover has no
+preferred orientation. In addition, the same random offset of up to $\pm1$\,dB is added to VV and VH, which leaves
+their ratio unchanged and mimics calibration and incidence-angle differences between scenes, orbits and satellites
+(Sentinel-1A in the training period, Sentinel-1A and 1C in the test period), and Gaussian noise with
+$\sigma=0.3$\,dB imitates residual speckle. Larger or per-channel intensity changes were avoided because they would
+alter the physical meaning of the backscatter, e.g., make water resemble vegetation.
+
+\textit{Loss and optimisation.} All models minimise class-weighted cross-entropy plus soft Dice over labelled pixels $p$,
 \begin{align}
 \mathcal{L}&=\mathcal{L}_{\mathrm{CE}}+\mathcal{L}_{\mathrm{Dice}},\qquad
 \mathcal{L}_{\mathrm{CE}}=-\frac{\sum_p w_{y_p}\log s_{p,y_p}}{\sum_p w_{y_p}},\\
