@@ -123,4 +123,4 @@ are needed; the place search uses the public OpenStreetMap service.
 | Prototype source, README, requirements | `app/`, `src/`, this file, `requirements.txt` |
 | Trained model weights | `weights/best_model.keras` (+ all compared models in `weights/`) |
 | Project report (IEEE format) | [`report/report.pdf`](report/report.pdf), LaTeX source `report/report.tex` |
-| Screen recording | *to be added* |
+| Screen recording | `Screen recording - Munich full run .mp4` (3:59 min, Munich 2025; Earth Engine waiting time shortened), submitted separately |
