@@ -9,6 +9,18 @@ continents, plus a prototype that maps any location over 12 months and reports c
 * **Independent check:** Esri 10 m Annual LULC (never used for training)
 * **Framework:** TensorFlow / Keras
 
+## Key results
+
+| Evaluation | Overall accuracy | mIoU |
+|---|---|---|
+| Test set (9 unseen regions, 2025–26), 8 classes | 0.51 | 0.30 |
+| **Same predictions, 6 radar-separable classes** | **0.72** | **0.46** |
+| 6 classes, without the two extreme regions (Atacama, Vatnajökull) | **0.77** | 0.46 |
+| Training regions in 2025–26 (images never seen), 8 classes | 0.76–0.78 | 0.56–0.58 |
+| Case study Munich 2025 vs. the independent Esri map | **0.88** (pixel agreement) | – |
+
+Model: DeepLabV3+ with ResNet50 (`weights/best_model.keras`). Full report: [`report/report.pdf`](report/report.pdf).
+
 ## What was done
 
 | Notebook | Content |
@@ -96,6 +108,7 @@ are needed; the place search uses the public OpenStreetMap service.
 | Path | Contents |
 |---|---|
 | `notebooks/` | The five notebooks above, with outputs |
+| `report/` | Project report (IEEE format, Cambria/Caladea 12 pt): PDF, LaTeX source, figures |
 | `app/streamlit_app.py` | Prototype |
 | `src/` | `config` (areas, classes, settings), `gee_data` (Earth Engine), `patching`, `temporal`, `model`, `training`, `evaluation`, `prototype`, `plots` |
 | `weights/` | `best_model.keras` (prototype model), all notebook-02 models, `stats.json`, training logs and figures; `experiments/` and `multitemporal/` logs and results |
@@ -109,4 +122,5 @@ are needed; the place search uses the public OpenStreetMap service.
 | Notebooks with results and training curves | `notebooks/01`–`05` |
 | Prototype source, README, requirements | `app/`, `src/`, this file, `requirements.txt` |
 | Trained model weights | `weights/best_model.keras` (+ all compared models in `weights/`) |
+| Project report (IEEE format) | [`report/report.pdf`](report/report.pdf), LaTeX source `report/report.tex` |
 | Screen recording | *to be added* |
