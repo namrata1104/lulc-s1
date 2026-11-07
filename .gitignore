@@ -17,3 +17,6 @@ kaggle_upload.log
 report/*.log
 report/*.xdv
 report/*.aux
+*.mov
+*.webm
+*.mp4
