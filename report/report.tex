@@ -64,9 +64,8 @@ generalisation, change detection, Google Earth Engine
 \section{Introduction}
 
 Land use and land cover maps are a basic input for monitoring urban growth, deforestation, agriculture and
-flooding. Recent global products such as Dynamic World~\cite{brown2022dynamic}, the Esri 10\,m Annual LULC
-map~\cite{karra2021global} and ESA WorldCover~\cite{zanaga2022worldcover} are derived from Sentinel-2 optical imagery
-with deep learning. Optical sensors, however, see nothing through clouds or at night, so in the tropics, in monsoon
+flooding. Recent global products such as Dynamic World~\cite{brown2022dynamic} and the Esri 10\,m Annual LULC
+map~\cite{karra2021global} are derived from Sentinel-2 optical imagery with deep learning. Optical sensors, however, see nothing through clouds or at night, so in the tropics, in monsoon
 regions and in northern winters a monthly map often cannot be produced at all. Synthetic aperture radar (SAR) such as
 Sentinel-1~\cite{torres2012gmes} transmits its own microwave pulse and observes the surface independently of weather
 and illumination. The price is a signal that is harder to interpret: backscatter depends on surface roughness,
@@ -91,8 +90,7 @@ flags unreliable months and compares the result with an independent map, demonst
 % =====================================================================================================
 \section{Related Work}
 
-\textit{SAR land-cover mapping.} Curated benchmarks such as SEN12MS~\cite{schmitt2019sen12ms} pair Sentinel-1 and Sentinel-2
-patches with land-cover labels for deep learning and data fusion. Multi-temporal Sentinel-1 series are
+\textit{SAR land-cover mapping.} Multi-temporal Sentinel-1 series are
 effective for crop-type mapping because the phenological cycle changes backscatter over the
 season~\cite{ndikumana2018deep}. The physics of the main confusions are well known: wet snow strongly absorbs C-band
 radiation and appears dark, whereas dry snow is largely transparent~\cite{nagler2000retrieval}.
@@ -692,9 +690,6 @@ C.~F. Brown \emph{et al.}, ``Dynamic World, near real-time global 10\,m land use
 K.~Karra, C.~Kontgis, Z.~Statman-Weil, J.~C. Mazzariello, M.~Mathis, and S.~P. Brumby, ``Global land use/land cover
 with Sentinel 2 and deep learning,'' in \emph{Proc. IEEE IGARSS}, 2021, pp.~4704--4707.
 
-\bibitem{zanaga2022worldcover}
-D.~Zanaga \emph{et al.}, ``ESA WorldCover 10\,m 2021 v200,'' Zenodo, 2022.
-
 \bibitem{torres2012gmes}
 R.~Torres \emph{et al.}, ``GMES Sentinel-1 mission,'' \emph{Remote Sensing of Environment}, vol.~120, pp.~9--24, 2012.
 
@@ -705,10 +700,6 @@ Univ. of Michigan Press, 2014.
 \bibitem{gorelick2017google}
 N.~Gorelick, M.~Hancher, M.~Dixon, S.~Ilyushchenko, D.~Thau, and R.~Moore, ``Google Earth Engine: Planetary-scale
 geospatial analysis for everyone,'' \emph{Remote Sensing of Environment}, vol.~202, pp.~18--27, 2017.
-
-\bibitem{schmitt2019sen12ms}
-M.~Schmitt, L.~H. Hughes, C.~Qiu, and X.~X. Zhu, ``SEN12MS -- A curated dataset of georeferenced multi-spectral
-Sentinel-1/2 imagery for deep learning and data fusion,'' \emph{ISPRS Annals}, vol.~IV-2/W7, pp.~153--160, 2019.
 
 \bibitem{ndikumana2018deep}
 E.~Ndikumana, D.~Ho Tong Minh, N.~Baghdadi, D.~Courault, and L.~Hossard, ``Deep recurrent neural network for
