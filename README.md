@@ -77,7 +77,7 @@ streamlit run app/streamlit_app.py
 
 1. Search a place by name (any city, country or landmark, OpenStreetMap) or enter latitude / longitude.
 2. Choose the start month; the 12 months must end by the last complete month.
-3. Choose the area (2.56, 5.12 or 10.24 km square) and press **Run** (about 30–90 s).
+3. Choose the area (2.56, 5.12 or 10.24 km square) and press **Run** (about 1–3 min for 10.24 km, less for smaller areas; depends on Earth Engine load).
 
 The app shows the 12 monthly maps, class percentages per month, month-to-month and total change in percentage points,
 the comparison with the Esri map and the Sentinel-1 input; results can be downloaded as CSV. Optional switches:

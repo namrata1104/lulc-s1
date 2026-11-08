@@ -519,7 +519,8 @@ two extremes$^{*}$ & 6 (merged) & \textbf{0.772} & 0.459 & 0.556 \\
 The prototype (Fig.~\ref{fig:arch}) is a Streamlit web application on top of a Python package that is shared with the
 training code, so that inference uses exactly the training preprocessing. The user enters a place name (resolved
 through OpenStreetMap Nominatim, with a choice among up to five matches) or coordinates, a start month and an area of
-2.56, 5.12 or 10.24\,km. A run takes about 30--90\,s on a laptop CPU.
+2.56, 5.12 or 10.24\,km. A run for 10.24\,km takes about 1--3\,min on a laptop CPU, most of it for building the
+composites in Earth Engine.
 
 \begin{figure}[t]
 \centering
@@ -529,7 +530,7 @@ through OpenStreetMap Nominatim, with a choice among up to five matches) or coor
   box/.default=white, arr/.style={-{Stealth[length=2mm]}, semithick}]
 \node[box=blue!8] (in) {User input: place name or lat/lon,\\ start month, area size};
 \node[box, below=of in] (geo) {Geocoding (OpenStreetMap)};
-\node[box=orange!10, below=of geo] (gee) {Google Earth Engine: 14 or 12 months\\ S1 GRD $\rightarrow$ one orbit pass $\rightarrow$
+\node[box=orange!10, below=of geo] (gee) {Google Earth Engine: 12 monthly composites\\ S1 GRD $\rightarrow$ one orbit pass $\rightarrow$
 Lee filter\\ $\rightarrow$ monthly median, VV$-$VH};
 \node[box, below=of gee] (norm) {Normalisation (training statistics)};
 \node[box=green!8, below=of norm] (net) {DeepLabV3+ inference, $256\times256$ windows,\\ 50\,\% overlap, averaged probabilities};
@@ -631,8 +632,8 @@ Leaf-on/leaf-off, crop growth and harvest, soil moisture, flooding and snow chan
 move pixels across class boundaries. In Munich, the scene-average backscatter varied by less than 1\,dB, yet the tree
 share changed by 6.5\pp. A further non-physical change is the number of acquisitions: in Munich the scenes per month
 rose from 8 to 14 during 2025, largely because Sentinel-1C (launched in December 2024) joined the constellation, and
-composites from two or three scenes (Kampala in early 2025, Delhi throughout 2025) produced swings of
-$\pm10$--$25$\pp. Changes should therefore be compared between the same
+in prototype runs, composites from two or three scenes (Kampala in early 2025, Delhi throughout 2025)
+changed the built-up share by 10--25\pp~from one month to the next. Changes should therefore be compared between the same
 months of different years, and low-scene months interpreted with care.
 
 \subsection{How classification errors inflate change}
@@ -650,11 +651,9 @@ shifts. Net changes also hide gross changes, since pixels moving into and out of
 
 Labels are an automatic product with its own errors and an optical class concept, which caps the attainable accuracy.
 The prototype processes $256\times256$ windows; because the ASPP image-pooling branch summarises each window, an
-uncertain window can switch class as a block, producing visible rectangles in low-scene months. Increasing the window
-overlap from 50\,\% to 75\,\% raised the agreement with Esri slightly (Delhi $+1.6$\pp, Kampala $+4.8$\pp) but did not
-reduce the monthly swings (17.9 vs. 17.6\pp~for built-up in Delhi) and made runs almost four times slower, so the noise
-originates in the input composites rather than at window seams. The Esri reference is annual and currently ends in
-2025, and Earth Engine quotas limit the number of runs.
+uncertain window can switch class as a block, producing visible rectangles in low-scene months; these blocks follow
+the noisy composites of months with few scenes rather than the window layout itself. The Esri reference is annual and
+currently ends in 2025, and Earth Engine quotas limit the number of runs and lengthen their duration.
 
 % =====================================================================================================
 \section{Conclusion}

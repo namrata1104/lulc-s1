@@ -124,7 +124,7 @@ if run:
 
 if "params" not in st.session_state:
     st.info("Choose a location and a start month in the sidebar, then press **Run**. "
-            "A run takes about 30–90 seconds: 12 Sentinel-1 composites are built in Google Earth Engine "
+            "A run takes about 1–3 minutes: 12 Sentinel-1 composites are built in Google Earth Engine "
             "and classified by the trained model.")
     st.map(pd.DataFrame({"lat": [lat], "lon": [lon]}), zoom=9, height=380)
     st.stop()
